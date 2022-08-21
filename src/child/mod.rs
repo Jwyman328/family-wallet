@@ -4,6 +4,7 @@ use std::fmt::Error;
 
 use crate::permissions::{BitcoinPermissions};
 use crate::HeadOfTheHouse;
+use bdk::bitcoin::Address;
 
 #[derive(Debug)]
 pub struct Child {
@@ -12,10 +13,10 @@ pub struct Child {
 }
 
 impl Child {
-    pub fn spend_bitcoin(&self, head_of_the_house: &mut HeadOfTheHouse, amount:i32) -> Result<&'static str, &'static str>{
-        head_of_the_house.spend_bitcoin(self.user_id, amount)
+    pub fn spend_bitcoin(&self, head_of_the_house: &mut HeadOfTheHouse, amount:f64, address: &str) -> Result<&'static str, &'static str>{
+        head_of_the_house.spend_bitcoin(self.user_id, amount, address)
     }
-    pub fn get_new_address(&self, head_of_the_house: &mut HeadOfTheHouse) -> &'static str{
+    pub fn get_new_address(&self, head_of_the_house: &mut HeadOfTheHouse) -> Address{
         let new_address = head_of_the_house.get_new_address(self.user_id);
         new_address
     }      
