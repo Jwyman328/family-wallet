@@ -1,6 +1,8 @@
 use crate::master_account::MasterAccount;
 use std::collections::HashMap;
 use std::{thread, time};
+use bdk::keys::{ GeneratableKey, GeneratedKey, bip39::{Mnemonic, WordCount, Language}};
+use bdk::{miniscript};
 
 /// set tests up to use our regtest nigiri electrum server
 /// hosted at 127.0.0.1:50000
@@ -16,11 +18,17 @@ pub fn get_default_mnenomic_words_2()-> Option<String>{
     return Some(String::from("talk again shop lizard found all elite argue ride misery drama street"));
 }
 
+pub fn get_random_mnenomic_words()-> Option<String>{
+    let mnemonic: GeneratedKey<_, miniscript::Segwitv0> = Mnemonic::generate((WordCount::Words12, Language::English)).unwrap();
+    let mnemonic_words = mnemonic.to_string();
+    Some(mnemonic_words)
+}
+
 /// Add more bitcoin to an address, this will automatically mine a block.
 /// on the esplora regtest that is running on localhost 3000.
-pub async fn mine_a_block()-> reqwest::Response{
+pub async fn mine_a_block(receiving_address: &str)-> reqwest::Response{
     let mut map = HashMap::new();
-    map.insert("address", "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw");
+    map.insert("address", receiving_address);
 
     let client = reqwest::Client::new();
     let res = client.post("http://localhost:3000/faucet")
@@ -31,7 +39,7 @@ pub async fn mine_a_block()-> reqwest::Response{
 }
 
 pub fn sleep_while_block_being_mined(){
-    let ten_millis = time::Duration::from_millis(4000);
+    let ten_millis = time::Duration::from_millis(6000);
 
     thread::sleep(ten_millis);
 }

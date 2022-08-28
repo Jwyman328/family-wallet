@@ -7,7 +7,8 @@ pub fn get_child_with_permissions_to_spend() -> Account{
         account_id: 1,
         bitcoin_amount: 0.0,
         permissions: vec![BitcoinPermissions::Send],
-        addresses:  vec![]
+        addresses:  vec![],
+        pending_transactions: vec![],
     };
     account_with_permissions
 }
@@ -18,7 +19,8 @@ pub fn get_child_without_permissions_to_spend() -> Account{
         account_id: 1,
         bitcoin_amount: 0.0,
         permissions: vec![],
-        addresses:  vec![]
+        addresses:  vec![],
+        pending_transactions: vec![],
     };
     account_without_permissions
 }

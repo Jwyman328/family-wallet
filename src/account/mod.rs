@@ -1,6 +1,5 @@
 pub mod mocks;
-use bdk::bitcoin::Address;
-
+use bdk::{bitcoin::{Address, Txid, Script}, TransactionDetails};
 
 use crate::permissions::BitcoinPermissions;
 /// An Account contains a series of permissions, an account_id, and a bitcoin amount
@@ -12,6 +11,7 @@ pub struct Account {
     pub account_id: i32,
     pub permissions: Vec<BitcoinPermissions>,
     pub addresses: Vec<Address>,
+    pub pending_transactions:Vec<TransactionDetails>,
 }
 
 impl  Account {
@@ -20,7 +20,8 @@ impl  Account {
             bitcoin_amount: bitcoin_amount,
             account_id: account_id,
             permissions: permissions,
-            addresses:Vec::new()
+            addresses:Vec::new(),
+            pending_transactions: Vec::new()
         };
         new_account
     }
@@ -47,14 +48,20 @@ impl  Account {
         self.bitcoin_amount = self.bitcoin_amount - amount;
      }
 
-     pub fn has_sufficient_funds_to_spend(&self, amount_to_spend: f64)-> bool{
-        let has_enough_bitcoin_to_spend = self.bitcoin_amount > amount_to_spend;
-        has_enough_bitcoin_to_spend
-     }
-
      pub fn add_address(&mut self, new_address:Address){
         self.addresses.push(new_address);
      }
+
+     pub fn add_pending_transaction(&mut self, pending_transaction: TransactionDetails){
+        println!("we are adding a pending transaction {:?}", pending_transaction);
+        self.pending_transactions.push(pending_transaction);
+     }
+
+     pub fn get_addresses_as_script_pub_keys(&self)-> Vec<Script>{
+        let addresses_as_script_pub_keys: Vec<Script> = self.addresses.iter().map(|address| address.script_pubkey()).collect();
+        addresses_as_script_pub_keys
+     }
+
  
 }
 

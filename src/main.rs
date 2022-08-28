@@ -16,7 +16,7 @@ use tokio;
 
 #[tokio::main]
 async fn main() {
-    block_on( mine_a_block());
+    block_on( mine_a_block("bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw"));
     // let mut master = HeadOfTheHouse::new();
     // master.master_account.sync_wallet_with_electrum_server(None) // sync with blockstream by default
     // master.add_child(2, String::from("my new child"),  vec![BitcoinPermissions::Send, BitcoinPermissions::Receive] );
