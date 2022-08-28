@@ -11,7 +11,6 @@ use bdk::bitcoin::Address;
 use bdk::bitcoin::AddressType;
 use bdk::bitcoin::util::address::WitnessVersion;
 
-#[derive(Debug)]
 pub struct HeadOfTheHouse {
     pub accounts: Vec<Account>,
     pub master_account: MasterAccount, //all debits and credits, master spending ability of other peoples money
@@ -70,7 +69,7 @@ impl  HeadOfTheHouse {
 
         if self.does_user_have_permission_to_spend(user_id) && self.does_user_have_sufficient_funds_to_spend(user_id, amount){
             // use the master account to spend
-            let spend_bitcoin_result = self.master_account.spend_bitcoin(amount, address)?;
+            let spend_bitcoin_result = self.master_account.spend_bitcoin(amount, address, 1.0)?;
 
             if spend_bitcoin_result == "Success"{
                 // update the users account
@@ -238,7 +237,7 @@ mod tests {
         let default_acconut = newHeadOfHouse.get_mut_account_by_id(1).unwrap();
         default_acconut.bitcoin_amount = 2.0;
 
-        attach_wallet_to_regtest_electrum_server(&newHeadOfHouse.master_account);
+        attach_wallet_to_regtest_electrum_server(&mut newHeadOfHouse.master_account);
         
         newHeadOfHouse.master_account.bitcoin_amount = 2.0;
         (newHeadOfHouse, mockChildren)
