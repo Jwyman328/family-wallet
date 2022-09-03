@@ -1,8 +1,9 @@
 use crate::master_account::MasterAccount;
 use std::collections::HashMap;
-use std::{thread, time};
+use std::{thread, time, env};
 use bdk::keys::{ GeneratableKey, GeneratedKey, bip39::{Mnemonic, WordCount, Language}};
 use bdk::{miniscript};
+use crate::env_variables::set_env_variables;
 
 /// set tests up to use our regtest nigiri electrum server
 /// hosted at 127.0.0.1:50000
@@ -50,4 +51,12 @@ pub fn test_result_type_is_not_err<T, E>(result:Result<T,E>){
         Ok(_) => assert_eq!(true, true), // is an okay type so pass test
         _ => assert_eq!(true, false) // we got an error so fail the test
     }
+}
+
+pub fn set_up(){
+    set_env_variables();
+}
+
+pub fn get_base_address()-> String{
+    env::var("test_address").unwrap()
 }

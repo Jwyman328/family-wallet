@@ -69,27 +69,32 @@ impl  Account {
 mod tests {
     use super::*;
     use mocks::{get_child_with_permissions_to_spend, get_child_without_permissions_to_spend};
+    use crate::testing_helpers::{set_up};
 
     #[test]
     fn has_permission_to_spend_returns_true_when_child_has_such_permission() {
+        set_up();
         let child_with_permissions = get_child_with_permissions_to_spend();
 
         assert_eq!(child_with_permissions.has_permission_to_spend(), true)  
     }
     #[test]
     fn has_permission_to_spend_returns_false_when_child_has_no_such_permission() {
+        set_up();
         let child_with_permissions = get_child_without_permissions_to_spend();
 
         assert_eq!(child_with_permissions.has_permission_to_spend(), false)  
     }
     #[test]
     fn child_with_permission_sends_bitcoin_successfully(){
+        set_up();
         let child_with_permissions_to_spend = get_child_with_permissions_to_spend();
 
         assert_eq!(child_with_permissions_to_spend.spend_bitcoin(5.0), Some("spending_bitcoin"))
     }
     #[test]
     fn child_without_permission_can_not_send_bitcoin(){
+        set_up();
         let child_with_permissions_to_spend = get_child_without_permissions_to_spend();
 
         assert_eq!(child_with_permissions_to_spend.spend_bitcoin(5.0), None)
@@ -98,6 +103,7 @@ mod tests {
     #[test]
     #[ignore]
     fn subtract_bitcoin_amount_subtracts(){
+        set_up();
         let mut child_with_permissions_to_spend = get_child_with_permissions_to_spend();
         child_with_permissions_to_spend.bitcoin_amount = 2.0;
         child_with_permissions_to_spend.subtract_bitcoin_amount(1.0);

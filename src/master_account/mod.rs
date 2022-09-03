@@ -187,7 +187,7 @@ impl MasterAccount {
 
 #[cfg(test)]
 pub mod test {
-    use crate::testing_helpers::{get_random_mnenomic_words, test_result_type_is_not_err};
+    use crate::testing_helpers::{get_random_mnenomic_words, test_result_type_is_not_err, set_up, get_base_address};
 
     use super::*;
     use crate::testing_helpers::{attach_wallet_to_regtest_electrum_server, get_default_mnenomic_words, get_default_mnenomic_words_2, mine_a_block, sleep_while_block_being_mined};
@@ -205,6 +205,7 @@ pub mod test {
 
     #[test]
     fn master_account_initialized_with_no_bitcoin(){
+        set_up();
         let mock_mnemonic = get_default_mnenomic_words();
 
         let mut new_master_account = MasterAccount::new(mock_mnemonic);
@@ -215,6 +216,7 @@ pub mod test {
     #[test]
     #[ignore] //fix test since we have new structure.
     fn spend_bitcoin_returns_success_and_reduces_bitcoin_amount(){
+        set_up();
         let mock_mnemonic = get_default_mnenomic_words();
 
         let mut new_master_account = MasterAccount::new(mock_mnemonic);
@@ -239,13 +241,15 @@ pub mod test {
     // }
     #[test]
     fn get_pending_transactions_has_one_tx_after_low_fee_transaction(){
+        set_up();
+
         // // use get_default_mnenomic_words_2 so that you hae a fresh wallet not connected to the other wallet derived from get_default_mnenomic_words
         let mock_mnemonic = get_default_mnenomic_words_2();
 
         let mut new_master_account = MasterAccount::new(mock_mnemonic);
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
 
-        let spent_transaction = new_master_account.spend_bitcoin(1.0, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw", 1.0);
+        let spent_transaction = new_master_account.spend_bitcoin(1.0, &get_base_address(), 1.0);
         test_result_type_is_not_err(spent_transaction);
 
         let pending_transactions = new_master_account.get_pending_transactions();
@@ -255,16 +259,18 @@ pub mod test {
 
     #[test]
     fn get_pending_transactions_has_no_tx_after_high_fee_transaction(){
+        set_up();
+
         // // use get_default_mnenomic_words_2 so that you hae a fresh wallet not connected to the other wallet derived from get_default_mnenomic_words
         let mock_mnemonic = get_default_mnenomic_words_2();
 
         let mut new_master_account = MasterAccount::new(mock_mnemonic);
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
         
-        let spent_transaction = new_master_account.spend_bitcoin(1.0, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw", 10.0);
+        let spent_transaction = new_master_account.spend_bitcoin(1.0, &get_base_address(), 10.0);
         test_result_type_is_not_err(spent_transaction);
 
-        aw!(mine_a_block("bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw"));
+        aw!(mine_a_block(&get_base_address()));
         sleep_while_block_being_mined();
 
         let pending_transactions = new_master_account.get_pending_transactions();
@@ -274,6 +280,8 @@ pub mod test {
 
     #[test]
     fn test_get_pending_spend_amount_reflects_unsettled_amount(){
+        set_up();
+
         let mock_mnemonic = get_random_mnenomic_words();
 
         let mut new_master_account = MasterAccount::new(mock_mnemonic);
@@ -281,7 +289,7 @@ pub mod test {
         aw!(mine_a_block(&new_master_account.generate_new_address().to_string()));
         sleep_while_block_being_mined();
 
-        let spent_transaction = new_master_account.spend_bitcoin(0.5, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw", 1.0);
+        let spent_transaction = new_master_account.spend_bitcoin(0.5, &get_base_address(), 1.0);
         test_result_type_is_not_err(spent_transaction);
 
         assert_eq!(new_master_account.get_pending_spend_amount(), 100000141.0)

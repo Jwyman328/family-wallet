@@ -154,7 +154,7 @@ impl  HeadOfTheHouse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing_helpers::{attach_wallet_to_regtest_electrum_server, get_default_mnenomic_words, mine_a_block, sleep_while_block_being_mined, get_random_mnenomic_words, test_result_type_is_not_err};
+    use crate::testing_helpers::{attach_wallet_to_regtest_electrum_server, get_default_mnenomic_words, mine_a_block, sleep_while_block_being_mined, get_random_mnenomic_words, test_result_type_is_not_err, get_base_address, set_up};
 
     // used to handle async await functions
     macro_rules! aw {
@@ -166,6 +166,7 @@ mod tests {
 
     #[test]
     fn get_account_by_id(){
+        set_up();
         let mut mock_children = Children::new();
         let mut new_head_of_house = HeadOfTheHouse::new(&mut mock_children, None);
 
@@ -179,6 +180,7 @@ mod tests {
 
     #[test]
     fn add_account_automatically_when_adding_new_user() {
+        set_up();
         let mut mock_children = Children::new();
         let mut new_head_of_house = HeadOfTheHouse::new(&mut mock_children, None);
         new_head_of_house.create_new_user(&mut mock_children,1, String::from("my new user"), vec![BitcoinPermissions::Send]);
@@ -189,6 +191,7 @@ mod tests {
 
     #[test]
     fn test_initiating_new_head_of_house_hold() {
+        set_up();
         let mut mock_children = Children::new();
         let new_head_of_house = HeadOfTheHouse::new(&mut mock_children, None);
         // automatically create a child for a master
@@ -213,6 +216,7 @@ mod tests {
 
     #[test]
     fn test_spend_bitcoin_success_from_head_of_house_child_reflected_in_master_account(){
+        set_up();
         let  (mut new_head_of_house, children) = set_up_random_user_with_two_bitcoin();
         let deafult_child = children.get_child_by_id(1).unwrap();
         let default_child_address = new_head_of_house.get_new_address(1);
@@ -237,6 +241,7 @@ mod tests {
 
     #[test]
     fn test_spend_bitcoin_unsuccess_from_head_of_house_child_because_insufficient_funds(){
+        set_up();
         let  (mut new_head_of_house, children) = set_up_random_user_with_two_bitcoin();
         let deafult_child = children.get_child_by_id(1).unwrap();
 
@@ -257,6 +262,7 @@ mod tests {
 
     #[test]
     fn test_child_adding_new_address_adds_to_master_account_then_childs_account(){
+        set_up();
         let  (mut new_head_of_house, mut children) = set_up_default_user_with_two_bitcoin();
         // create a second user
         new_head_of_house.create_new_user(&mut children, 2, String::from("user_2"),vec![BitcoinPermissions::Send, BitcoinPermissions::Receive]);
@@ -284,6 +290,7 @@ mod tests {
 
     #[test]
     fn test_get_account_balance_returns_current_account_amount(){
+        set_up();
         let (mock_children, mut new_head_of_house ) = set_up_user_with_no_bitcoin_and_one_child();
 
         // get address for child?
@@ -301,6 +308,7 @@ mod tests {
 
     #[test]
     fn test_get_pending_spend_amount_return_pending_spend_values(){
+        set_up();
         let (mock_children, mut new_head_of_house ) = set_up_user_with_no_bitcoin_and_one_child();
 
         // get address for child?
@@ -311,7 +319,7 @@ mod tests {
         aw!(mine_a_block(&second_child_first_address.to_string()));
         sleep_while_block_being_mined();
 
-        let spend_result = second_child.spend_bitcoin(&mut new_head_of_house, 0.5, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw");
+        let spend_result = second_child.spend_bitcoin(&mut new_head_of_house, 0.5, &get_base_address());
         test_result_type_is_not_err(spend_result);
         
         assert_eq!(new_head_of_house.get_pending_spend_amount(2), 100000141.0)
