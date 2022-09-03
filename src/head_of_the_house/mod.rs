@@ -7,7 +7,10 @@ use crate::children::Children;
 use crate::helpers::convert_satoshis_to_float;
 use bdk::{TransactionDetails};
 use bdk::bitcoin::Address;
-// TODO make it so the master account can easily give bitcoin to other accounts
+
+// TODO make it so the master account can easily give bitcoin to other accounts, need to give them the entire transactionDetails data
+// and address, as if it is their account.
+
 pub struct HeadOfTheHouse {
     pub accounts: Vec<Account>,
     pub master_account: MasterAccount, //all debits and credits, master spending ability of other peoples money
@@ -92,7 +95,7 @@ impl  HeadOfTheHouse {
 
     pub fn does_user_have_permission_to_spend(&self, user_id:i32)->bool{
         let user_account = self.get_account_by_id(user_id).unwrap();
-        user_account.hasPermissionToSpend()
+        user_account.has_permission_to_spend()
     }
 
     pub fn subtract_amount_from_user_account(&mut self, user_id:i32, amount: f64){
@@ -148,14 +151,10 @@ impl  HeadOfTheHouse {
         convert_satoshis_to_float(pending_spend_amount)
       }
 }
-
+#[cfg(test)]
 mod tests {
-    use bdk::bitcoin::AddressType;
-    use crate::testing_helpers::{attach_wallet_to_regtest_electrum_server, get_default_mnenomic_words, mine_a_block, sleep_while_block_being_mined, get_random_mnenomic_words};
-
-    use crate::master_account;
-
     use super::*;
+    use crate::testing_helpers::{attach_wallet_to_regtest_electrum_server, get_default_mnenomic_words, mine_a_block, sleep_while_block_being_mined, get_random_mnenomic_words, test_result_type_is_not_err};
 
     // used to handle async await functions
     macro_rules! aw {
@@ -167,56 +166,54 @@ mod tests {
 
     #[test]
     fn get_account_by_id(){
-        let mut mockChildren = Children::new();
-        let mut newHeadOfHouse = HeadOfTheHouse::new(&mut mockChildren, None);
+        let mut mock_children = Children::new();
+        let mut new_head_of_house = HeadOfTheHouse::new(&mut mock_children, None);
 
         //create child 
-        newHeadOfHouse.create_new_user(&mut mockChildren, 2, String::from("one"), vec![BitcoinPermissions::Send]);
-        let childs_account = newHeadOfHouse.get_account_by_id(2).unwrap();
+        new_head_of_house.create_new_user(&mut mock_children, 2, String::from("one"), vec![BitcoinPermissions::Send]);
+        let childs_account = new_head_of_house.get_account_by_id(2).unwrap();
         assert_eq!(childs_account.bitcoin_amount, 0.0);
         assert_eq!(childs_account.account_id, 2);
     }
 
 
-
     #[test]
     fn add_account_automatically_when_adding_new_user() {
-        let mut mockChildren = Children::new();
-        let mut newHeadOfHouse = HeadOfTheHouse::new(&mut mockChildren, None);
-        newHeadOfHouse.create_new_user(&mut mockChildren,1, String::from("my new user"), vec![BitcoinPermissions::Send]);
-        let new_account = newHeadOfHouse.accounts.get(0).unwrap();
+        let mut mock_children = Children::new();
+        let mut new_head_of_house = HeadOfTheHouse::new(&mut mock_children, None);
+        new_head_of_house.create_new_user(&mut mock_children,1, String::from("my new user"), vec![BitcoinPermissions::Send]);
+        let new_account = new_head_of_house.accounts.get(0).unwrap();
         assert_eq!(new_account.bitcoin_amount, 0.0);
         assert_eq!(new_account.account_id, 1);
     }
 
     #[test]
     fn test_initiating_new_head_of_house_hold() {
-        let mut mockChildren = Children::new();
-        let mut newHeadOfHouse = HeadOfTheHouse::new(&mut mockChildren, None);
+        let mut mock_children = Children::new();
+        let new_head_of_house = HeadOfTheHouse::new(&mut mock_children, None);
         // automatically create a child for a master
-        assert_eq!(mockChildren.children.len(), 1);
+        assert_eq!(mock_children.children.len(), 1);
 
-        let let_head_of_household_master_child = mockChildren.get_child_by_id(1).unwrap();
+        let let_head_of_household_master_child = mock_children.get_child_by_id(1).unwrap();
         assert_eq!(let_head_of_household_master_child.user_id, 1);
         assert_eq!(let_head_of_household_master_child.account_name, String::from("main"));
 
 
         // automatically create an account for the master
-        let let_head_of_household_regular_account = newHeadOfHouse.get_account_by_id(1).unwrap();
+        let let_head_of_household_regular_account = new_head_of_house.get_account_by_id(1).unwrap();
         assert_eq!(let_head_of_household_regular_account.bitcoin_amount, 0.0);
         assert_eq!(let_head_of_household_regular_account.account_id, 1);
         assert_eq!(let_head_of_household_regular_account.permissions, vec![BitcoinPermissions::Send, BitcoinPermissions::Receive]);
 
 
         // create a master account
-        assert_eq!(newHeadOfHouse.accounts.len(), 1);
-        assert_eq!(newHeadOfHouse.master_account.bitcoin_amount, 0.0);
-
+        assert_eq!(new_head_of_house.accounts.len(), 1);
+        assert_eq!(new_head_of_house.master_account.bitcoin_amount, 0.0);
     }
 
     #[test]
     fn test_spend_bitcoin_success_from_head_of_house_child_reflected_in_master_account(){
-        let  (mut new_head_of_house, mut children) = set_up_random_user_with_two_bitcoin();
+        let  (mut new_head_of_house, children) = set_up_random_user_with_two_bitcoin();
         let deafult_child = children.get_child_by_id(1).unwrap();
         let default_child_address = new_head_of_house.get_new_address(1);
 
@@ -225,7 +222,8 @@ mod tests {
         sleep_while_block_being_mined();
 
         // spend the default childs bitcoin
-        deafult_child.spend_bitcoin(&mut new_head_of_house,0.5, "bcrt1qapswup3gzwzmwqp9sk7s5zvm3v9n00x6v7cn20");
+        let spend_result = deafult_child.spend_bitcoin(&mut new_head_of_house,0.5, "bcrt1qapswup3gzwzmwqp9sk7s5zvm3v9n00x6v7cn20");
+        test_result_type_is_not_err(spend_result);
 
         // put the recent spend btc in a block
         aw!(mine_a_block("crt1qapswup3gzwzmwqp9sk7s5zvm3v9n00x6v7cn20"));
@@ -239,13 +237,13 @@ mod tests {
 
     #[test]
     fn test_spend_bitcoin_unsuccess_from_head_of_house_child_because_insufficient_funds(){
-        let  (mut new_head_of_house, mut children) = set_up_random_user_with_two_bitcoin();
+        let  (mut new_head_of_house, children) = set_up_random_user_with_two_bitcoin();
         let deafult_child = children.get_child_by_id(1).unwrap();
 
         let insuffiecient_funds_error = deafult_child.spend_bitcoin(&mut new_head_of_house,3.0, "tb1qapswup3gzwzmwqp9sk7s5zvm3v9n00x6whp7ax");
         match insuffiecient_funds_error {
             Err(m) => assert_eq!(m,"user does not have permission or sufficient funds to spend"),
-            Ok(x) => assert_eq!(false, true),
+            Ok(_) => assert_eq!(false, true),
         }
 
         let amount = new_head_of_house.get_account_balance(1);
@@ -286,36 +284,37 @@ mod tests {
 
     #[test]
     fn test_get_account_balance_returns_current_account_amount(){
-        let (mut mockChildren, mut newHeadOfHouse ) = set_up_user_with_no_bitcoin_and_one_child();
+        let (mock_children, mut new_head_of_house ) = set_up_user_with_no_bitcoin_and_one_child();
 
         // get address for child?
-        let second_child = mockChildren.get_child_by_id(2).unwrap();
-        let second_child_first_address = second_child.get_new_address(&mut newHeadOfHouse);
+        let second_child = mock_children.get_child_by_id(2).unwrap();
+        let second_child_first_address = second_child.get_new_address(&mut new_head_of_house);
         // now send bitcoin to it
 
         aw!(mine_a_block(&second_child_first_address.to_string()));
         aw!(mine_a_block(&second_child_first_address.to_string()));
         sleep_while_block_being_mined();
-        let child_account_balance = newHeadOfHouse.get_account_balance(2);
+        let child_account_balance = new_head_of_house.get_account_balance(2);
         
         assert_eq!(child_account_balance, 200000000.0)
     }
 
     #[test]
     fn test_get_pending_spend_amount_return_pending_spend_values(){
-        let (mut mockChildren, mut newHeadOfHouse ) = set_up_user_with_no_bitcoin_and_one_child();
+        let (mock_children, mut new_head_of_house ) = set_up_user_with_no_bitcoin_and_one_child();
 
         // get address for child?
-        let second_child = mockChildren.get_child_by_id(2).unwrap();
-        let second_child_first_address = second_child.get_new_address(&mut newHeadOfHouse);
+        let second_child = mock_children.get_child_by_id(2).unwrap();
+        let second_child_first_address = second_child.get_new_address(&mut new_head_of_house);
         // now send bitcoin to it
         // give the user bitcoin that they can spend
         aw!(mine_a_block(&second_child_first_address.to_string()));
         sleep_while_block_being_mined();
 
-        second_child.spend_bitcoin(&mut newHeadOfHouse, 0.5, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw");
+        let spend_result = second_child.spend_bitcoin(&mut new_head_of_house, 0.5, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw");
+        test_result_type_is_not_err(spend_result);
         
-        assert_eq!(newHeadOfHouse.get_pending_spend_amount(2), 100000141.0)
+        assert_eq!(new_head_of_house.get_pending_spend_amount(2), 100000141.0)
     }
 
 
@@ -331,30 +330,30 @@ mod tests {
     }
 
     fn set_up_user_with_two_bitcoin(mnemonic_words: Option<String>) -> (HeadOfTheHouse, Children){
-        let mut mockChildren = Children::new();
-        let mut newHeadOfHouse = HeadOfTheHouse::new(&mut mockChildren, mnemonic_words);        
-        let default_acconut = newHeadOfHouse.get_mut_account_by_id(1).unwrap();
+        let mut mock_children = Children::new();
+        let mut new_head_of_house = HeadOfTheHouse::new(&mut mock_children, mnemonic_words);        
+        let default_acconut = new_head_of_house.get_mut_account_by_id(1).unwrap();
         default_acconut.bitcoin_amount = 2.0;
 
-        attach_wallet_to_regtest_electrum_server(&mut newHeadOfHouse.master_account);
+        attach_wallet_to_regtest_electrum_server(&mut new_head_of_house.master_account);
 
-        let master_account_new_address = newHeadOfHouse.master_account.generate_new_address();
+        let master_account_new_address = new_head_of_house.master_account.generate_new_address();
 
         aw!(mine_a_block(&master_account_new_address.to_string()));
         aw!(mine_a_block(&master_account_new_address.to_string()));
         sleep_while_block_being_mined();
         
-        (newHeadOfHouse, mockChildren)
+        (new_head_of_house, mock_children)
     }
 
     fn set_up_user_with_no_bitcoin_and_one_child()-> (Children, HeadOfTheHouse){
-        let mut mockChildren = Children::new();
+        let mut mock_children = Children::new();
         let mnemonic_words = get_random_mnenomic_words();
-        let mut newHeadOfHouse = HeadOfTheHouse::new(&mut mockChildren, mnemonic_words);        
-        let default_acconut = newHeadOfHouse.get_mut_account_by_id(1).unwrap();
-        attach_wallet_to_regtest_electrum_server(&mut newHeadOfHouse.master_account);
+        let mut new_head_of_house = HeadOfTheHouse::new(&mut mock_children, mnemonic_words);        
+        new_head_of_house.get_mut_account_by_id(1).unwrap();
+        attach_wallet_to_regtest_electrum_server(&mut new_head_of_house.master_account);
 
-        newHeadOfHouse.create_new_user(&mut mockChildren, 2, String::from("user_2"),vec![BitcoinPermissions::Send, BitcoinPermissions::Receive]);
-        (mockChildren, newHeadOfHouse )
+        new_head_of_house.create_new_user(&mut mock_children, 2, String::from("user_2"),vec![BitcoinPermissions::Send, BitcoinPermissions::Receive]);
+        (mock_children, new_head_of_house )
     }
 }

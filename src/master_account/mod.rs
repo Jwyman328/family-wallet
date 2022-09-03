@@ -2,12 +2,10 @@ use bdk::{miniscript, Wallet, KeychainKind, SyncOptions, SignOptions};
 use bdk::database::MemoryDatabase;
 use bdk::wallet::AddressIndex::New;
 use bdk::wallet::AddressInfo;
-use bdk::bitcoin::Address;
-use bdk::bitcoin;
+use bdk::bitcoin::{Address, Network, Txid};
 use bdk::FeeRate;
 use bdk::keys::{DerivableKey, GeneratableKey, GeneratedKey, ExtendedKey, bip39::{Mnemonic, WordCount, Language}};
 use bdk::template::Bip84;
-use bdk::bitcoin::Network;
 use std::str::FromStr;
 use bdk::electrum_client::Client;
 use bdk::blockchain::ElectrumBlockchain;
@@ -15,7 +13,6 @@ use bdk::blockchain::Blockchain;
 use bdk::TransactionDetails;
 use crate::helpers::{convert_float_to_satoshis, convert_satoshis_to_float};
 use bdk::{Error};
-use bdk::bitcoin::Txid;
 
 
 
@@ -80,10 +77,10 @@ impl MasterAccount {
     /// and returns the ElectrumBlockchain struct. 
     /// this can be an running electrum server, by default we will connect to blockstreams
     /// but it could be a local server as well like a regtest one created from nigiri at 127.0.0.1:50000
-    pub fn sync_wallet_with_electrum_server(&mut self, electrumUrl: Option<&str>){
-        let electrumClientUrl = electrumUrl.unwrap_or("ssl://electrum.blockstream.info:60002");
+    pub fn sync_wallet_with_electrum_server(&mut self, electrum_url: Option<&str>){
+        let electrum_client_url = electrum_url.unwrap_or("ssl://electrum.blockstream.info:60002");
         
-        let client = Client::new(electrumClientUrl).unwrap(); 
+        let client = Client::new(electrum_client_url).unwrap(); 
         let blockchain = ElectrumBlockchain::from(client);
         
         self.wallet.sync(&blockchain, SyncOptions::default()).unwrap();
@@ -108,16 +105,16 @@ impl MasterAccount {
 
         println!("tx_details is {:?}", tx_details);
     
-        let finalized = self.wallet.sign(&mut psbt, SignOptions::default()).unwrap();
+        self.wallet.sign(&mut psbt, SignOptions::default()).unwrap();
         
         // now broadcast it 
         let raw_transaction = psbt.extract_tx();
         let txid = raw_transaction.txid();
         println!("the txid {}", txid);
-        let myBlockchain = self.blockchain.as_ref();
+        let my_blockchain = self.blockchain.as_ref();
         
-        myBlockchain.unwrap().broadcast(&raw_transaction);
-        self.wallet.sync(myBlockchain.unwrap(), SyncOptions::default());
+        my_blockchain.unwrap().broadcast(&raw_transaction);
+        self.sync_wallet();
 
         // copy the transaction so that we can return a clone
         let copied_transaction = TransactionDetails { 
@@ -162,22 +159,22 @@ impl MasterAccount {
 
     pub fn get_pending_transactions(&mut self) -> &Vec<TransactionDetails>{
         // resync the blockchain to the wallet again to get the latest data.
-        self.wallet.sync(self.blockchain.as_ref().unwrap(), SyncOptions::default());
+        self.sync_wallet();
 
         // for each pending transaction go check if it is still pending
         let mut transactions_that_are_no_longer_pending: Vec<Txid> = vec![];
-        for transactionDetail in &self.pending_transactions{
-            let mut myTransaction  = self.wallet.get_tx(&transactionDetail.txid, false).unwrap().unwrap();
+        for transaction_detail in &self.pending_transactions{
+            let my_transaction  = self.wallet.get_tx(&transaction_detail.txid, false).unwrap().unwrap();
             
-            if myTransaction.confirmation_time != None{
+            if my_transaction.confirmation_time != None{
                 // remove it from the list if it has been confirmed
-                transactions_that_are_no_longer_pending.push(myTransaction.txid.clone());
+                transactions_that_are_no_longer_pending.push(my_transaction.txid.clone());
             }
-            println!("txId {} this is my transaction {:?}", transactionDetail.txid, myTransaction);
+            println!("txId {} this is my transaction {:?}", transaction_detail.txid, my_transaction);
         }
         // filter out the pending transactions, removing the ones that have been confirmed
         for item in transactions_that_are_no_longer_pending{
-            let index = self.pending_transactions.iter().position(|txDetail| txDetail.txid.to_string() == item.to_string());
+            let index = self.pending_transactions.iter().position(|tx_detail| tx_detail.txid.to_string() == item.to_string());
             self.pending_transactions.remove(index.unwrap());
         }
         self.pending_transactions.as_ref()
@@ -188,14 +185,23 @@ impl MasterAccount {
     }
 }
 
-
+#[cfg(test)]
 pub mod test {
-    use crate::testing_helpers::get_random_mnenomic_words;
+    use crate::testing_helpers::{get_random_mnenomic_words, test_result_type_is_not_err};
 
     use super::*;
     use crate::testing_helpers::{attach_wallet_to_regtest_electrum_server, get_default_mnenomic_words, get_default_mnenomic_words_2, mine_a_block, sleep_while_block_being_mined};
+    
+    #[allow(unused_imports)]
     use futures::executor::block_on;
     use tokio_test;
+
+    // used to handle async await functions
+    macro_rules! aw {
+        ($e:expr) => {
+            tokio_test::block_on($e)
+        };
+        }
 
     #[test]
     fn master_account_initialized_with_no_bitcoin(){
@@ -216,7 +222,8 @@ pub mod test {
 
 
         new_master_account.bitcoin_amount = 2.0;
-        let response = new_master_account.spend_bitcoin(1.0, "tb1qapswup3gzwzmwqp9sk7s5zvm3v9n00x6whp7ax", 1.0).unwrap();
+        let response = new_master_account.spend_bitcoin(1.0, "tb1qapswup3gzwzmwqp9sk7s5zvm3v9n00x6whp7ax", 1.0);
+        test_result_type_is_not_err(response);
         assert_eq!(new_master_account.bitcoin_amount, 1.0);
         // assert_eq!(response, "Success")
     }
@@ -238,18 +245,13 @@ pub mod test {
         let mut new_master_account = MasterAccount::new(mock_mnemonic);
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
 
-        new_master_account.spend_bitcoin(1.0, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw", 1.0);
+        let spent_transaction = new_master_account.spend_bitcoin(1.0, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw", 1.0);
+        test_result_type_is_not_err(spent_transaction);
+
         let pending_transactions = new_master_account.get_pending_transactions();
         // we should now have one pending transaction since no block has been mined since this transaction was made
         assert_eq!(pending_transactions.len(), 1);
     }
-
-    // used to handle async await functions
-    macro_rules! aw {
-        ($e:expr) => {
-            tokio_test::block_on($e)
-        };
-      }
 
     #[test]
     fn get_pending_transactions_has_no_tx_after_high_fee_transaction(){
@@ -259,7 +261,9 @@ pub mod test {
         let mut new_master_account = MasterAccount::new(mock_mnemonic);
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
         
-        new_master_account.spend_bitcoin(1.0, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw", 10.0);
+        let spent_transaction = new_master_account.spend_bitcoin(1.0, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw", 10.0);
+        test_result_type_is_not_err(spent_transaction);
+
         aw!(mine_a_block("bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw"));
         sleep_while_block_being_mined();
 
@@ -277,8 +281,9 @@ pub mod test {
         aw!(mine_a_block(&new_master_account.generate_new_address().to_string()));
         sleep_while_block_being_mined();
 
-        new_master_account.spend_bitcoin(0.5, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw", 1.0);
-        
+        let spent_transaction = new_master_account.spend_bitcoin(0.5, "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw", 1.0);
+        test_result_type_is_not_err(spent_transaction);
+
         assert_eq!(new_master_account.get_pending_spend_amount(), 100000141.0)
     }
 }

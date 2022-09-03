@@ -1,5 +1,5 @@
 pub mod mocks;
-use bdk::{bitcoin::{Address, Txid, Script}, TransactionDetails};
+use bdk::{bitcoin::{Address, Script}, TransactionDetails};
 
 use crate::permissions::BitcoinPermissions;
 /// An Account contains a series of permissions, an account_id, and a bitcoin amount
@@ -27,21 +27,21 @@ impl  Account {
     }
 
     pub fn spend_bitcoin(&self, amount:f64) -> Option<&str>{
-        if self.hasPermissionToSpend() {
+        if self.has_permission_to_spend() {
           Some("spending_bitcoin")
         }else {
           None
         }
      }
  
-     pub fn hasPermissionToSpend(&self)-> bool{
-         let mut hasPermissionToSpend = false;
+     pub fn has_permission_to_spend(&self)-> bool{
+         let mut has_permission_to_spend = false;
          for permission in &self.permissions {
              if *permission == BitcoinPermissions::Send{
-                 hasPermissionToSpend = true
+                 has_permission_to_spend = true
              }
          }
-         hasPermissionToSpend 
+         has_permission_to_spend 
      }
 
      pub fn subtract_bitcoin_amount(&mut self, amount: f64){
@@ -65,22 +65,22 @@ impl  Account {
  
 }
 
-
+#[cfg(test)]
 mod tests {
     use super::*;
     use mocks::{get_child_with_permissions_to_spend, get_child_without_permissions_to_spend};
 
     #[test]
-    fn hasPermissionToSpend_returns_true_when_child_has_such_permission() {
+    fn has_permission_to_spend_returns_true_when_child_has_such_permission() {
         let child_with_permissions = get_child_with_permissions_to_spend();
 
-        assert_eq!(child_with_permissions.hasPermissionToSpend(), true)  
+        assert_eq!(child_with_permissions.has_permission_to_spend(), true)  
     }
     #[test]
-    fn hasPermissionToSpend_returns_false_when_child_has_no_such_permission() {
+    fn has_permission_to_spend_returns_false_when_child_has_no_such_permission() {
         let child_with_permissions = get_child_without_permissions_to_spend();
 
-        assert_eq!(child_with_permissions.hasPermissionToSpend(), false)  
+        assert_eq!(child_with_permissions.has_permission_to_spend(), false)  
     }
     #[test]
     fn child_with_permission_sends_bitcoin_successfully(){
@@ -95,6 +95,8 @@ mod tests {
         assert_eq!(child_with_permissions_to_spend.spend_bitcoin(5.0), None)
     }
 
+    #[test]
+    #[ignore]
     fn subtract_bitcoin_amount_subtracts(){
         let mut child_with_permissions_to_spend = get_child_with_permissions_to_spend();
         child_with_permissions_to_spend.bitcoin_amount = 2.0;

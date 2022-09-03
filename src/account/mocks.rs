@@ -1,5 +1,4 @@
 use crate::account::Account;
-use crate::head_of_the_house::HeadOfTheHouse;
 use crate::permissions::BitcoinPermissions;
 
 pub fn get_child_with_permissions_to_spend() -> Account{

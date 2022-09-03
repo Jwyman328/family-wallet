@@ -1,8 +1,5 @@
 pub mod mocks;
 
-use std::fmt::Error;
-
-use crate::permissions::{BitcoinPermissions};
 use crate::HeadOfTheHouse;
 use bdk::bitcoin::Address;
 
@@ -21,16 +18,16 @@ impl Child {
         new_address
     }      
 }
-
+//#[cfg(test)]
 // mod tests {
 //     use super::*;
 //     use mocks::{mock_child};
 
 //     //#[test]
-//     // fn hasPermissionToSpend_returns_true_when_child_has_such_permission() {
+//     // fn has_permission_to_spend_returns_true_when_child_has_such_permission() {
 //     //     let child_with_permissions = get_child_with_permissions_to_spend();
 
-//     //     assert_eq!(child_with_permissions.hasPermissionToSpend(), true)  
+//     //     assert_eq!(child_with_permissions.has_permission_to_spend(), true)  
 //     // }
     
    

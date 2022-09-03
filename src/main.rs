@@ -9,7 +9,7 @@ pub mod helpers;
 pub mod testing_helpers;
 
 use head_of_the_house::HeadOfTheHouse;
-use permissions::BitcoinPermissions;
+// use permissions::BitcoinPermissions;
 use crate::testing_helpers::mine_a_block;
 use futures::executor::block_on;
 use tokio;

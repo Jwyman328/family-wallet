@@ -31,6 +31,7 @@ pub async fn mine_a_block(receiving_address: &str)-> reqwest::Response{
     map.insert("address", receiving_address);
 
     let client = reqwest::Client::new();
+    // TODO make this an env variable.
     let res = client.post("http://localhost:3000/faucet")
         .json(&map)
         .send()
@@ -42,4 +43,11 @@ pub fn sleep_while_block_being_mined(){
     let ten_millis = time::Duration::from_millis(6000);
 
     thread::sleep(ten_millis);
+}
+
+pub fn test_result_type_is_not_err<T, E>(result:Result<T,E>){
+    match result {
+        Ok(_) => assert_eq!(true, true), // is an okay type so pass test
+        _ => assert_eq!(true, false) // we got an error so fail the test
+    }
 }
