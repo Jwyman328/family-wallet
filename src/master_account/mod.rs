@@ -6,6 +6,7 @@ use bdk::bitcoin::{Address, Network, Txid};
 use bdk::FeeRate;
 use bdk::keys::{DerivableKey, GeneratableKey, GeneratedKey, ExtendedKey, bip39::{Mnemonic, WordCount, Language}};
 use bdk::template::Bip84;
+use std::env;
 use std::str::FromStr;
 use bdk::electrum_client::Client;
 use bdk::blockchain::ElectrumBlockchain;
@@ -78,7 +79,8 @@ impl MasterAccount {
     /// this can be an running electrum server, by default we will connect to blockstreams
     /// but it could be a local server as well like a regtest one created from nigiri at 127.0.0.1:50000
     pub fn sync_wallet_with_electrum_server(&mut self, electrum_url: Option<&str>){
-        let electrum_client_url = electrum_url.unwrap_or("ssl://electrum.blockstream.info:60002");
+        let default_electrum_server = env::var("electrum_server").unwrap();
+        let electrum_client_url = electrum_url.unwrap_or(&default_electrum_server);
         
         let client = Client::new(electrum_client_url).unwrap(); 
         let blockchain = ElectrumBlockchain::from(client);

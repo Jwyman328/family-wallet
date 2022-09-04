@@ -8,7 +8,8 @@ use crate::env_variables::set_env_variables;
 /// set tests up to use our regtest nigiri electrum server
 /// hosted at 127.0.0.1:50000
 pub fn attach_wallet_to_regtest_electrum_server(master_account: &mut MasterAccount ){
-    master_account.sync_wallet_with_electrum_server(Some("127.0.0.1:50000"));
+    let default_electrum_server = env::var("electrum_server").unwrap();
+    master_account.sync_wallet_with_electrum_server(Some(&default_electrum_server));
 }
 
 pub fn get_default_mnenomic_words()-> Option<String>{
@@ -33,7 +34,9 @@ pub async fn mine_a_block(receiving_address: &str)-> reqwest::Response{
 
     let client = reqwest::Client::new();
     // TODO make this an env variable.
-    let res = client.post("http://localhost:3000/faucet")
+    let regtest_rpc = get_regtest_rpc();
+    let regtest_generate_block_url = regtest_rpc + "/faucet";
+    let res = client.post(regtest_generate_block_url)
         .json(&map)
         .send()
         .await.unwrap();
@@ -59,4 +62,8 @@ pub fn set_up(){
 
 pub fn get_base_address()-> String{
     env::var("test_address").unwrap()
+}
+
+pub fn get_regtest_rpc()-> String {
+    env::var("regtest_rpc").unwrap()
 }
