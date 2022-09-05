@@ -8,6 +8,7 @@ pub mod children;
 pub mod helpers;
 pub mod testing_helpers;
 pub mod env_variables;
+pub mod custom_errors;
 
 use head_of_the_house::HeadOfTheHouse;
 // use permissions::BitcoinPermissions;

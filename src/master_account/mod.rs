@@ -13,6 +13,7 @@ use bdk::blockchain::ElectrumBlockchain;
 use bdk::blockchain::Blockchain;
 use bdk::TransactionDetails;
 use crate::helpers::{convert_float_to_satoshis, convert_satoshis_to_float};
+use crate::custom_errors::{WalletError, AccountError};
 use bdk::{Error};
 
 
@@ -27,25 +28,28 @@ pub struct MasterAccount {
 }
 
 impl MasterAccount {
-    pub fn new(words:Option<String>) -> MasterAccount{
-        let wallet = MasterAccount::generate_wallet(words);
-        MasterAccount {
+    pub fn new(words:Option<String>) -> Result<MasterAccount, AccountError> {
+        let wallet = MasterAccount::generate_wallet(words).map_err(
+            |err| AccountError::InsufficientAccount
+        )?;
+
+        Ok(MasterAccount {
             bitcoin_amount: 0.0,
             all_addresses: Vec::new(),
             account_addresses: Vec::new(),
             wallet: wallet,
             blockchain: None,
             pending_transactions: vec![]
-        }
+        })
     }
 
-    pub fn generate_wallet(words:Option<String>)-> Wallet<MemoryDatabase> {
+    pub fn generate_wallet(words:Option<String>)-> Result<Wallet<MemoryDatabase>, WalletError> {
         // if provided words, then use them to generate a wallet,
         // if not then generate your own randomly
         let mnemonic_words = match words {
             Some(w) => w,
             _ => {
-                let mnemonic: GeneratedKey<_, miniscript::Segwitv0> = Mnemonic::generate((WordCount::Words12, Language::English)).unwrap();
+                let mnemonic: GeneratedKey<_, miniscript::Segwitv0> = Mnemonic::generate((WordCount::Words12, Language::English)).expect("mnemonic unable to be generated");
                 // Convert mnemonic to string
                 let mnemonic_words = mnemonic.to_string();
                 mnemonic_words
@@ -57,57 +61,57 @@ impl MasterAccount {
         let network = Network::Regtest; // Or this can be Network::Bitcoin, Network::Signet or Network::Testnet
 
         // Parse a mnemonic
-        let mnemonic  = Mnemonic::parse(&mnemonic_words).unwrap();
+        let mnemonic  = Mnemonic::parse(&mnemonic_words)?;
         // Generate the extended key
-        let xkey: ExtendedKey = mnemonic.into_extended_key().unwrap();
+        let xkey: ExtendedKey = mnemonic.into_extended_key()?;
         // Get xprv from the extended key
-        let xprv = xkey.into_xprv(network).unwrap();
+        let xprv = xkey.into_xprv(network).ok_or(WalletError::KeyError)?;
 
         let wallet = Wallet::new(
             Bip84(xprv, KeychainKind::External),
             Some(Bip84(xprv, KeychainKind::Internal)),
             network,
             MemoryDatabase::default(),
-        )
-        .unwrap();
+        ).expect("Error instantiating wallet");
 
-        wallet
+        Ok(wallet)
     }
 
     /// This function connects to a currently running electrum server 
     /// and returns the ElectrumBlockchain struct. 
     /// this can be an running electrum server, by default we will connect to blockstreams
     /// but it could be a local server as well like a regtest one created from nigiri at 127.0.0.1:50000
-    pub fn sync_wallet_with_electrum_server(&mut self, electrum_url: Option<&str>){
-        let default_electrum_server = env::var("electrum_server").unwrap();
+    pub fn sync_wallet_with_electrum_server(&mut self, electrum_url: Option<&str>) -> Result<(), WalletError>{
+        let default_electrum_server = env::var("electrum_server")?;
         let electrum_client_url = electrum_url.unwrap_or(&default_electrum_server);
         
-        let client = Client::new(electrum_client_url).unwrap(); 
+        let client = Client::new(electrum_client_url)?; 
         let blockchain = ElectrumBlockchain::from(client);
         
-        self.wallet.sync(&blockchain, SyncOptions::default()).unwrap();
+        self.wallet.sync(&blockchain, SyncOptions::default())?;
         self.set_blockchain(blockchain);
+        Ok(())
     }
 
     pub fn set_blockchain(&mut self, blockchain: ElectrumBlockchain){
         self.blockchain = Some(blockchain);
     }
 
-    pub fn spend_bitcoin(&mut self, amount: f64, address: &str, sat_per_vb: f32 ) -> Result<TransactionDetails, &'static str>{
+    pub fn spend_bitcoin(&mut self, amount: f64, address: &str, sat_per_vb: f32 ) -> Result<TransactionDetails, WalletError>{
         // make sure our wallet is up to date before we make a spend.
-        self.sync_wallet();
+        self.sync_wallet()?;
 
-        let receiving_address = Address::from_str(address).unwrap();
+        let receiving_address = Address::from_str(address)?;
         let mut tx_builder = self.wallet.build_tx();
         tx_builder
             .add_recipient(receiving_address.script_pubkey(), convert_float_to_satoshis(amount))
             .enable_rbf().fee_rate(FeeRate::from_sat_per_vb(sat_per_vb));
 
-        let (mut psbt, tx_details) = tx_builder.finish().unwrap();
+        let (mut psbt, tx_details) = tx_builder.finish()?;
 
         println!("tx_details is {:?}", tx_details);
     
-        self.wallet.sign(&mut psbt, SignOptions::default()).unwrap();
+        self.wallet.sign(&mut psbt, SignOptions::default())?;
         
         // now broadcast it 
         let raw_transaction = psbt.extract_tx();
@@ -115,8 +119,15 @@ impl MasterAccount {
         println!("the txid {}", txid);
         let my_blockchain = self.blockchain.as_ref();
         
-        my_blockchain.unwrap().broadcast(&raw_transaction);
-        self.sync_wallet();
+        let electrum_blockchain_option = my_blockchain;
+        
+
+        let _electrum_blockchain = match electrum_blockchain_option {
+            Some(electrum_blockchain) => electrum_blockchain.broadcast(&raw_transaction),
+            None => return Err(WalletError::BroadcastTransactionError),
+        };
+
+        self.sync_wallet()?;
 
         // copy the transaction so that we can return a clone
         let copied_transaction = TransactionDetails { 
@@ -137,36 +148,36 @@ impl MasterAccount {
         Ok(copied_transaction)
     }
 
-    pub fn generate_new_address(&mut self) -> Address {        
-        let my_new_address = self.wallet.get_address(New).unwrap();
+    pub fn generate_new_address(&mut self) -> Result<Address, WalletError> {        
+        let my_new_address = self.wallet.get_address(New)?;
         let copied_address = my_new_address.clone();
         self.all_addresses.push(my_new_address);
-        copied_address 
+        Ok(copied_address)
     }
 
-    pub fn get_pending_spend_amount(&mut self)-> f64{ 
-      let pending_transactions = self.get_pending_transactions();
+    pub fn get_pending_spend_amount(&mut self)-> Result<f64, WalletError>{ 
+      let pending_transactions = self.get_pending_transactions()?;
       
       let mut pending_spend_amount = 0;
       for transaction in pending_transactions{
         pending_spend_amount += transaction.sent;
-        pending_spend_amount += transaction.fee.unwrap();
+        pending_spend_amount += transaction.fee.ok_or(WalletError::SyncElectrumError)?;
       }
-      convert_satoshis_to_float(pending_spend_amount) 
+      Ok(convert_satoshis_to_float(pending_spend_amount))
     }
 
     pub fn get_bitcoin_total(&self)-> Result<u64, Error> { 
         self.wallet.get_balance()
      }
 
-    pub fn get_pending_transactions(&mut self) -> &Vec<TransactionDetails>{
+    pub fn get_pending_transactions(&mut self) -> Result<&Vec<TransactionDetails>, WalletError>{
         // resync the blockchain to the wallet again to get the latest data.
-        self.sync_wallet();
+        self.sync_wallet()?;
 
         // for each pending transaction go check if it is still pending
         let mut transactions_that_are_no_longer_pending: Vec<Txid> = vec![];
         for transaction_detail in &self.pending_transactions{
-            let my_transaction  = self.wallet.get_tx(&transaction_detail.txid, false).unwrap().unwrap();
+            let my_transaction  = self.wallet.get_tx(&transaction_detail.txid, false)?.ok_or(WalletError::SyncElectrumError)?;
             
             if my_transaction.confirmation_time != None{
                 // remove it from the list if it has been confirmed
@@ -176,14 +187,23 @@ impl MasterAccount {
         }
         // filter out the pending transactions, removing the ones that have been confirmed
         for item in transactions_that_are_no_longer_pending{
-            let index = self.pending_transactions.iter().position(|tx_detail| tx_detail.txid.to_string() == item.to_string());
-            self.pending_transactions.remove(index.unwrap());
+            let index = self.pending_transactions.iter().position(|tx_detail| tx_detail.txid.to_string() == item.to_string()).ok_or(WalletError::SyncElectrumError)?;
+            self.pending_transactions.remove(index);
         }
-        self.pending_transactions.as_ref()
+        Ok(self.pending_transactions.as_ref())
     }
 
-    pub fn sync_wallet(&self){
-        self.wallet.sync(self.blockchain.as_ref().unwrap(), SyncOptions::default());
+    // TODO handle result
+    pub fn sync_wallet(&self)-> Result<(),WalletError>{
+        let current_blockchain_option = self.blockchain.as_ref();
+        match current_blockchain_option {
+            None => Err(WalletError::SyncElectrumError),
+            Some(current_blockchain) => {
+                self.wallet.sync(current_blockchain, SyncOptions::default())?;
+                Ok(())
+            }
+        }
+        
     }
 }
 
@@ -210,7 +230,7 @@ pub mod test {
         set_up();
         let mock_mnemonic = get_default_mnenomic_words();
 
-        let mut new_master_account = MasterAccount::new(mock_mnemonic);
+        let mut new_master_account = MasterAccount::new(mock_mnemonic).unwrap();
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
 
         assert_eq!(new_master_account.bitcoin_amount, 0.0)
@@ -221,7 +241,7 @@ pub mod test {
         set_up();
         let mock_mnemonic = get_default_mnenomic_words();
 
-        let mut new_master_account = MasterAccount::new(mock_mnemonic);
+        let mut new_master_account = MasterAccount::new(mock_mnemonic).unwrap();
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
 
 
@@ -248,13 +268,13 @@ pub mod test {
         // // use get_default_mnenomic_words_2 so that you hae a fresh wallet not connected to the other wallet derived from get_default_mnenomic_words
         let mock_mnemonic = get_default_mnenomic_words_2();
 
-        let mut new_master_account = MasterAccount::new(mock_mnemonic);
+        let mut new_master_account = MasterAccount::new(mock_mnemonic).unwrap();
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
 
         let spent_transaction = new_master_account.spend_bitcoin(1.0, &get_base_address(), 1.0);
         test_result_type_is_not_err(spent_transaction);
 
-        let pending_transactions = new_master_account.get_pending_transactions();
+        let pending_transactions = new_master_account.get_pending_transactions().expect("get_pending_transactions_has_one_tx_after_low_fee_transaction pending_transactions error");
         // we should now have one pending transaction since no block has been mined since this transaction was made
         assert_eq!(pending_transactions.len(), 1);
     }
@@ -266,7 +286,7 @@ pub mod test {
         // // use get_default_mnenomic_words_2 so that you hae a fresh wallet not connected to the other wallet derived from get_default_mnenomic_words
         let mock_mnemonic = get_default_mnenomic_words_2();
 
-        let mut new_master_account = MasterAccount::new(mock_mnemonic);
+        let mut new_master_account = MasterAccount::new(mock_mnemonic).unwrap();
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
         
         let spent_transaction = new_master_account.spend_bitcoin(1.0, &get_base_address(), 10.0);
@@ -275,7 +295,7 @@ pub mod test {
         aw!(mine_a_block(&get_base_address()));
         sleep_while_block_being_mined();
 
-        let pending_transactions = new_master_account.get_pending_transactions();
+        let pending_transactions = new_master_account.get_pending_transactions().unwrap();
         // // we should now have no pending transactions since a new block was mined
         assert_eq!(pending_transactions.len(), 0);
     }
@@ -286,14 +306,14 @@ pub mod test {
 
         let mock_mnemonic = get_random_mnenomic_words();
 
-        let mut new_master_account = MasterAccount::new(mock_mnemonic);
+        let mut new_master_account = MasterAccount::new(mock_mnemonic).unwrap();
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
-        aw!(mine_a_block(&new_master_account.generate_new_address().to_string()));
+        aw!(mine_a_block(&new_master_account.generate_new_address().unwrap().to_string()));
         sleep_while_block_being_mined();
 
         let spent_transaction = new_master_account.spend_bitcoin(0.5, &get_base_address(), 1.0);
         test_result_type_is_not_err(spent_transaction);
 
-        assert_eq!(new_master_account.get_pending_spend_amount(), 100000141.0)
+        assert_eq!(new_master_account.get_pending_spend_amount().unwrap(), 100000141.0)
     }
 }

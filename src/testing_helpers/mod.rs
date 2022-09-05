@@ -1,14 +1,22 @@
 use crate::master_account::MasterAccount;
 use std::collections::HashMap;
 use std::{thread, time, env};
+use bdk::bitcoin::psbt::PartiallySignedTransaction;
 use bdk::keys::{ GeneratableKey, GeneratedKey, bip39::{Mnemonic, WordCount, Language}};
-use bdk::{miniscript};
+use bdk::{miniscript, TransactionDetails};
+use bdk::bitcoin::Address;
+use std::str::FromStr;
+use bdk::Wallet;
+use bdk::database::MemoryDatabase;
+use crate::helpers::convert_float_to_satoshis;
+use bdk::FeeRate;
+
 use crate::env_variables::set_env_variables;
 
 /// set tests up to use our regtest nigiri electrum server
 /// hosted at 127.0.0.1:50000
 pub fn attach_wallet_to_regtest_electrum_server(master_account: &mut MasterAccount ){
-    let default_electrum_server = env::var("electrum_server").unwrap();
+    let default_electrum_server = env::var("electrum_server").expect("error setting default_electrum_server");
     master_account.sync_wallet_with_electrum_server(Some(&default_electrum_server));
 }
 
@@ -21,7 +29,7 @@ pub fn get_default_mnenomic_words_2()-> Option<String>{
 }
 
 pub fn get_random_mnenomic_words()-> Option<String>{
-    let mnemonic: GeneratedKey<_, miniscript::Segwitv0> = Mnemonic::generate((WordCount::Words12, Language::English)).unwrap();
+    let mnemonic: GeneratedKey<_, miniscript::Segwitv0> = Mnemonic::generate((WordCount::Words12, Language::English)).expect("error generating mnemonic");
     let mnemonic_words = mnemonic.to_string();
     Some(mnemonic_words)
 }
@@ -33,13 +41,12 @@ pub async fn mine_a_block(receiving_address: &str)-> reqwest::Response{
     map.insert("address", receiving_address);
 
     let client = reqwest::Client::new();
-    // TODO make this an env variable.
     let regtest_rpc = get_regtest_rpc();
     let regtest_generate_block_url = regtest_rpc + "/faucet";
     let res = client.post(regtest_generate_block_url)
         .json(&map)
         .send()
-        .await.unwrap();
+        .await.expect("error attempting to mine_a_block");
     res
 }
 
@@ -61,9 +68,23 @@ pub fn set_up(){
 }
 
 pub fn get_base_address()-> String{
-    env::var("test_address").unwrap()
+    env::var("test_address").expect("Error getting test_address env var")
 }
 
 pub fn get_regtest_rpc()-> String {
-    env::var("regtest_rpc").unwrap()
+    env::var("regtest_rpc").expect("error getting regtest_rpc env var")
+}
+
+
+pub fn build_mock_transaction(wallet:&Wallet<MemoryDatabase>, mock_amount:f64)->(PartiallySignedTransaction, TransactionDetails){
+    let test_address = get_base_address();
+    let receiving_address = Address::from_str(&test_address).expect("Error in build_mock_transaction receiving_address");
+
+    let mut tx_builder = wallet.build_tx();
+    tx_builder
+        .add_recipient(receiving_address.script_pubkey(), convert_float_to_satoshis(mock_amount))
+        .enable_rbf().fee_rate(FeeRate::from_sat_per_vb(1.0));
+
+    let (psbt, tx_details) = tx_builder.finish().expect("error building mock_transaction");
+    (psbt, tx_details)
 }
