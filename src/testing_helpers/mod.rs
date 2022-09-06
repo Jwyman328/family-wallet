@@ -76,13 +76,13 @@ pub fn get_regtest_rpc()-> String {
 }
 
 
-pub fn build_mock_transaction(wallet:&Wallet<MemoryDatabase>, mock_amount:f64)->(PartiallySignedTransaction, TransactionDetails){
+pub fn build_mock_transaction(wallet:&Wallet<MemoryDatabase>, mock_amount:u64)->(PartiallySignedTransaction, TransactionDetails){
     let test_address = get_base_address();
     let receiving_address = Address::from_str(&test_address).expect("Error in build_mock_transaction receiving_address");
 
     let mut tx_builder = wallet.build_tx();
     tx_builder
-        .add_recipient(receiving_address.script_pubkey(), convert_float_to_satoshis(mock_amount))
+        .add_recipient(receiving_address.script_pubkey(), mock_amount)
         .enable_rbf().fee_rate(FeeRate::from_sat_per_vb(1.0));
 
     let (psbt, tx_details) = tx_builder.finish().expect("error building mock_transaction");

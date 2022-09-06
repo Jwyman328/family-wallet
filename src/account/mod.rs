@@ -7,26 +7,28 @@ use crate::permissions::BitcoinPermissions;
 
 #[derive(Debug)]
 pub struct Account {
-    pub bitcoin_amount: f64,
+    pub bitcoin_amount: u64,
     pub account_id: i32,
     pub permissions: Vec<BitcoinPermissions>,
     pub addresses: Vec<Address>,
     pub pending_transactions:Vec<TransactionDetails>,
+    pub bitcoin_transfered_from_master: u64,
 }
 
 impl  Account {
-    pub fn new(bitcoin_amount: f64, account_id: i32, permissions: Vec<BitcoinPermissions>)-> Account {
+    pub fn new(bitcoin_amount: u64, account_id: i32, permissions: Vec<BitcoinPermissions>)-> Account {
         let new_account = Account {
             bitcoin_amount: bitcoin_amount,
             account_id: account_id,
             permissions: permissions,
             addresses:Vec::new(),
-            pending_transactions: Vec::new()
+            pending_transactions: Vec::new(),
+            bitcoin_transfered_from_master: 0,
         };
         new_account
     }
 
-    pub fn spend_bitcoin(&self, amount:f64) -> Option<&str>{
+    pub fn spend_bitcoin(&self, amount:u64) -> Option<&str>{
         if self.has_permission_to_spend() {
           Some("spending_bitcoin")
         }else {
@@ -44,7 +46,7 @@ impl  Account {
          has_permission_to_spend 
      }
 
-     pub fn subtract_bitcoin_amount(&mut self, amount: f64){
+     pub fn subtract_bitcoin_amount(&mut self, amount: u64){
         self.bitcoin_amount = self.bitcoin_amount - amount;
      }
 
@@ -62,6 +64,14 @@ impl  Account {
         addresses_as_script_pub_keys
      }
 
+     pub fn receive_transfered_bitcoin(&mut self, amount: u64){
+        self.bitcoin_transfered_from_master += amount;
+     }
+
+     pub fn send_transfered_bitcoin(&mut self, amount: u64){
+        self.bitcoin_transfered_from_master -= amount;
+     }
+
  
 }
 
@@ -69,7 +79,7 @@ impl  Account {
 mod tests {
     use super::*;
     use mocks::{get_child_with_permissions_to_spend, get_child_without_permissions_to_spend};
-    use crate::testing_helpers::{set_up};
+    use crate::{testing_helpers::{set_up}, helpers::convert_float_to_satoshis};
 
     #[test]
     fn has_permission_to_spend_returns_true_when_child_has_such_permission() {
@@ -90,24 +100,23 @@ mod tests {
         set_up();
         let child_with_permissions_to_spend = get_child_with_permissions_to_spend();
 
-        assert_eq!(child_with_permissions_to_spend.spend_bitcoin(5.0), Some("spending_bitcoin"))
+        assert_eq!(child_with_permissions_to_spend.spend_bitcoin(convert_float_to_satoshis(5.0)), Some("spending_bitcoin"))
     }
     #[test]
     fn child_without_permission_can_not_send_bitcoin(){
         set_up();
         let child_with_permissions_to_spend = get_child_without_permissions_to_spend();
 
-        assert_eq!(child_with_permissions_to_spend.spend_bitcoin(5.0), None)
+        assert_eq!(child_with_permissions_to_spend.spend_bitcoin(convert_float_to_satoshis(5.0)), None)
     }
 
     #[test]
-    #[ignore]
     fn subtract_bitcoin_amount_subtracts(){
         set_up();
         let mut child_with_permissions_to_spend = get_child_with_permissions_to_spend();
-        child_with_permissions_to_spend.bitcoin_amount = 2.0;
-        child_with_permissions_to_spend.subtract_bitcoin_amount(1.0);
+        child_with_permissions_to_spend.bitcoin_amount = 200000000;
+        child_with_permissions_to_spend.subtract_bitcoin_amount(100000000);
 
-        assert_eq!(child_with_permissions_to_spend.bitcoin_amount, 1.0)
+        assert_eq!(child_with_permissions_to_spend.bitcoin_amount, 100000000)
     }
 }

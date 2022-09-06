@@ -19,27 +19,29 @@ use bdk::{Error};
 
 
 pub struct MasterAccount {
-    pub bitcoin_amount: f64,
+    pub bitcoin_amount: u64,
     pub all_addresses: Vec<AddressInfo>,
     pub account_addresses: Vec<AddressInfo>,
     pub wallet: Wallet<MemoryDatabase>,
     pub blockchain: Option<ElectrumBlockchain>,
     pub pending_transactions:Vec<TransactionDetails>,
+    pub amount_transfered_to_children: u64
 }
 
 impl MasterAccount {
     pub fn new(words:Option<String>) -> Result<MasterAccount, AccountError> {
         let wallet = MasterAccount::generate_wallet(words).map_err(
-            |err| AccountError::InsufficientAccount
+            |_err| AccountError::InsufficientAccount
         )?;
 
         Ok(MasterAccount {
-            bitcoin_amount: 0.0,
+            bitcoin_amount: 0,
             all_addresses: Vec::new(),
             account_addresses: Vec::new(),
             wallet: wallet,
             blockchain: None,
-            pending_transactions: vec![]
+            pending_transactions: vec![],
+            amount_transfered_to_children: 0,
         })
     }
 
@@ -97,14 +99,14 @@ impl MasterAccount {
         self.blockchain = Some(blockchain);
     }
 
-    pub fn spend_bitcoin(&mut self, amount: f64, address: &str, sat_per_vb: f32 ) -> Result<TransactionDetails, WalletError>{
+    pub fn spend_bitcoin(&mut self, amount: u64, address: &str, sat_per_vb: f32 ) -> Result<TransactionDetails, WalletError>{
         // make sure our wallet is up to date before we make a spend.
         self.sync_wallet()?;
 
         let receiving_address = Address::from_str(address)?;
         let mut tx_builder = self.wallet.build_tx();
         tx_builder
-            .add_recipient(receiving_address.script_pubkey(), convert_float_to_satoshis(amount))
+            .add_recipient(receiving_address.script_pubkey(), amount)
             .enable_rbf().fee_rate(FeeRate::from_sat_per_vb(sat_per_vb));
 
         let (mut psbt, tx_details) = tx_builder.finish()?;
@@ -142,7 +144,10 @@ impl MasterAccount {
         println!("I am pushing tx_details  {:?} to pending_transactions", copied_transaction);
         self.pending_transactions.push(tx_details);
 
-        self.bitcoin_amount = self.bitcoin_amount - amount;
+        println!("bitcoin amount {} other amount {}", self.bitcoin_amount, amount);
+        // TODO should this be get_bitcoin_total? should we update here?
+        // yes we need to update after spending
+        self.bitcoin_amount = self.get_bitcoin_total()?; // - amount;
         println!("you have spent {} bitcoin, you now have {} remaining", amount, self.bitcoin_amount);
 
         Ok(copied_transaction)
@@ -155,7 +160,7 @@ impl MasterAccount {
         Ok(copied_address)
     }
 
-    pub fn get_pending_spend_amount(&mut self)-> Result<f64, WalletError>{ 
+    pub fn get_pending_spend_amount(&mut self)-> Result<u64, WalletError>{ 
       let pending_transactions = self.get_pending_transactions()?;
       
       let mut pending_spend_amount = 0;
@@ -163,12 +168,26 @@ impl MasterAccount {
         pending_spend_amount += transaction.sent;
         pending_spend_amount += transaction.fee.ok_or(WalletError::SyncElectrumError)?;
       }
-      Ok(convert_satoshis_to_float(pending_spend_amount))
+      Ok(pending_spend_amount)
     }
 
     pub fn get_bitcoin_total(&self)-> Result<u64, Error> { 
+        self.sync_wallet().unwrap();
         self.wallet.get_balance()
      }
+
+    pub fn get_bitcoin_total_minus_transfers_to_children(&self) ->Result<u64, Error> {
+        let total_amount_from_utxos =  self.get_bitcoin_total()?;
+        Ok(total_amount_from_utxos -  self.amount_transfered_to_children)
+    }
+
+    pub fn transfer_bitcoin(&mut self, amount: u64){
+        self.amount_transfered_to_children += amount
+    }
+
+    pub fn receive_bitcoin_transfer_from_child(&mut self, amount: u64){
+        self.amount_transfered_to_children -= amount
+    }
 
     pub fn get_pending_transactions(&mut self) -> Result<&Vec<TransactionDetails>, WalletError>{
         // resync the blockchain to the wallet again to get the latest data.
@@ -193,7 +212,6 @@ impl MasterAccount {
         Ok(self.pending_transactions.as_ref())
     }
 
-    // TODO handle result
     pub fn sync_wallet(&self)-> Result<(),WalletError>{
         let current_blockchain_option = self.blockchain.as_ref();
         match current_blockchain_option {
@@ -233,23 +251,23 @@ pub mod test {
         let mut new_master_account = MasterAccount::new(mock_mnemonic).unwrap();
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
 
-        assert_eq!(new_master_account.bitcoin_amount, 0.0)
+        assert_eq!(new_master_account.bitcoin_amount, 0)
     }
     #[test]
-    #[ignore] //fix test since we have new structure.
     fn spend_bitcoin_returns_success_and_reduces_bitcoin_amount(){
         set_up();
-        let mock_mnemonic = get_default_mnenomic_words();
+        let mock_mnemonic = get_random_mnenomic_words();
 
         let mut new_master_account = MasterAccount::new(mock_mnemonic).unwrap();
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
+        aw!(mine_a_block(&new_master_account.generate_new_address().unwrap().to_string()));
+        aw!(mine_a_block(&new_master_account.generate_new_address().unwrap().to_string()));
+        sleep_while_block_being_mined();
 
 
-        new_master_account.bitcoin_amount = 2.0;
-        let response = new_master_account.spend_bitcoin(1.0, "tb1qapswup3gzwzmwqp9sk7s5zvm3v9n00x6whp7ax", 1.0);
+        let response = new_master_account.spend_bitcoin(convert_float_to_satoshis(1.0), "tb1qapswup3gzwzmwqp9sk7s5zvm3v9n00x6whp7ax", 1.0);
         test_result_type_is_not_err(response);
-        assert_eq!(new_master_account.bitcoin_amount, 1.0);
-        // assert_eq!(response, "Success")
+        assert_eq!(new_master_account.bitcoin_amount, 99999790);
     }
 
     // #[test]
@@ -271,7 +289,7 @@ pub mod test {
         let mut new_master_account = MasterAccount::new(mock_mnemonic).unwrap();
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
 
-        let spent_transaction = new_master_account.spend_bitcoin(1.0, &get_base_address(), 1.0);
+        let spent_transaction = new_master_account.spend_bitcoin(convert_float_to_satoshis(1.0), &get_base_address(), 1.0);
         test_result_type_is_not_err(spent_transaction);
 
         let pending_transactions = new_master_account.get_pending_transactions().expect("get_pending_transactions_has_one_tx_after_low_fee_transaction pending_transactions error");
@@ -288,8 +306,11 @@ pub mod test {
 
         let mut new_master_account = MasterAccount::new(mock_mnemonic).unwrap();
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
-        
-        let spent_transaction = new_master_account.spend_bitcoin(1.0, &get_base_address(), 10.0);
+        aw!(mine_a_block(&new_master_account.generate_new_address().unwrap().to_string()));
+        aw!(mine_a_block(&new_master_account.generate_new_address().unwrap().to_string()));
+        sleep_while_block_being_mined();
+
+        let spent_transaction = new_master_account.spend_bitcoin(convert_float_to_satoshis(1.0), &get_base_address(), 10.0);
         test_result_type_is_not_err(spent_transaction);
 
         aw!(mine_a_block(&get_base_address()));
@@ -310,10 +331,30 @@ pub mod test {
         attach_wallet_to_regtest_electrum_server(&mut new_master_account);
         aw!(mine_a_block(&new_master_account.generate_new_address().unwrap().to_string()));
         sleep_while_block_being_mined();
+        new_master_account.sync_wallet().unwrap();
 
-        let spent_transaction = new_master_account.spend_bitcoin(0.5, &get_base_address(), 1.0);
+        let spent_transaction = new_master_account.spend_bitcoin(convert_float_to_satoshis(0.5), &get_base_address(), 1.0);
         test_result_type_is_not_err(spent_transaction);
 
-        assert_eq!(new_master_account.get_pending_spend_amount().unwrap(), 100000141.0)
+        assert_eq!(new_master_account.get_pending_spend_amount().unwrap(), 100000141)
+    }
+
+    #[test]
+    fn test_get_bitcoin_total_minus_transfers_to_children(){
+        set_up();
+
+        let mock_mnemonic = get_random_mnenomic_words();
+
+        let mut new_master_account = MasterAccount::new(mock_mnemonic).unwrap();
+        attach_wallet_to_regtest_electrum_server(&mut new_master_account);
+        // add one btc
+        aw!(mine_a_block(&new_master_account.generate_new_address().unwrap().to_string()));
+        sleep_while_block_being_mined();
+
+        // set transfered amount to .4
+        new_master_account.amount_transfered_to_children = convert_float_to_satoshis(0.4);
+        let total_btc = new_master_account.get_bitcoin_total_minus_transfers_to_children().unwrap();
+
+        assert_eq!(total_btc, convert_float_to_satoshis(0.6));
     }
 }

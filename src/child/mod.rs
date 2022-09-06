@@ -11,7 +11,7 @@ pub struct Child {
 }
 
 impl Child {
-    pub fn spend_bitcoin(&self, head_of_the_house: &mut HeadOfTheHouse, amount:f64, address: &str) -> Result<&'static str, AccountError>{
+    pub fn spend_bitcoin(&self, head_of_the_house: &mut HeadOfTheHouse, amount:u64, address: &str) -> Result<&'static str, AccountError>{
         head_of_the_house.spend_bitcoin(self.user_id, amount, address)
     }
     pub fn get_new_address(&self, head_of_the_house: &mut HeadOfTheHouse) -> Result<Address, WalletError>{
