@@ -4,11 +4,14 @@ use std::io;
 use std::{fmt, env};
 
 
-
+/// An Error with an individual `Account`
 #[derive(Debug)]
 pub enum AccountError {
+    /// If searching for an `Account` and it does not exist.
     AccountDoesNotExist(&'static str),
+    /// If an action attempted is not permitted on this `Account`.
     InsufficientAccount,
+    /// A general catch all `Account` error.
     Default(&'static str),
 }
 
@@ -24,7 +27,7 @@ impl Display for AccountError {
   }
 
 
-  // Implement std::convert::From for AppError; from io::Error
+// Implement std::convert::From for AppError; from io::Error
 impl From<io::Error> for AccountError {
     fn from(_error: io::Error) -> Self {
         
@@ -32,11 +35,17 @@ impl From<io::Error> for AccountError {
     }
 }
 
+/// An error related to the Wallet functionality.
 #[derive(Debug)]
 pub enum WalletError {
+    /// An error due to not being able to connect with the electrum server.
     SyncElectrumError,
+    /// An error related to a bitcoin address, for example searching for an address that does not exist.
     AddressError,
+    /// An error associated when trying to broadcast to the bitcoin network.
     BroadcastTransactionError,
+    /// An error associated with the wallet's public or private keys.
+    /// For example trying to create an xpriv from an invalid mnemonic phrase. 
     KeyError,
 }
 

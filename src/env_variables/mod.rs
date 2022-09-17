@@ -1,10 +1,26 @@
 use std::env;
 
+/// An environment variable represented as a struct.
+/// 
+/// This struct will be used to set an environment variable.
+/// 
+/// # Examples 
+///  ```
+/// use std::env;
+/// 
+/// let env_variable = EnvironmentVariable {
+///     name: "testName",
+///     value: "testValue"
+/// }
+/// env::set_var(env_variable.name, env_variable.value);
+/// ```
+
 pub struct EnvironmentVariable {
     name: &'static str,
     value: &'static str,
 }
 
+/// Set default enviornment variables based off of the current runtime environment (test, dev/prod).
 pub fn set_env_variables(){
     let mut env_variables:Vec<EnvironmentVariable> = vec![];
 

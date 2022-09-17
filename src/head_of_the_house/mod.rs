@@ -10,14 +10,28 @@ use crate::custom_errors::{AccountError, WalletError};
 use bdk::{TransactionDetails};
 use bdk::bitcoin::Address;
 
-
+/// A struct which manages the relationship between an `Account` and the `MasterAccount`.
+/// 
+/// This is needed because an `Account` does not actual hold any keys and therefore does not 
+/// have the ability to generate addresses or sign transactions, all wallet related activity
+/// must be done through the MasterAccount. Therefore, an `Account` must communicate with the 
+/// MasterAccount to perform such actions on its behalf and if successful the `Account` state
+/// must be updated.
 pub struct HeadOfTheHouse {
     pub accounts: Vec<Account>,
-    pub master_account: MasterAccount, //all debits and credits, master spending ability of other peoples money
-    pub user_id: i32,
+    pub master_account: MasterAccount,
+    pub user_id: i32, //TODO is this user_id even used?
 }
 
 impl  HeadOfTheHouse {
+    /// Function which creates a new `HeadOfHouse` with a default `MasterAccount` and a default `Child` with full permissions and a default `Account`.  
+    /// 
+    /// The default `Child` and `Account` share the same user_id and therefore are related.
+    /// 
+    /// # Errors
+    /// If an invalid mnemonic is passed then the fn will return an `AccountError`.
+    /// 
+    /// TODO do we need this default account which is created?
     pub fn new(mut children: &mut Children, mnemonic_words: Option<String>)-> Result<HeadOfTheHouse, AccountError> {
         let mut head_of_house = HeadOfTheHouse {
             accounts: vec![],
@@ -29,11 +43,13 @@ impl  HeadOfTheHouse {
         Ok(head_of_house)
     }
 
+    /// Create a new `Child` and `Account` with the same id.
     pub fn create_new_user(&mut self, children:&mut Children,  account_id: i32,account_name: String, permissions: Vec<BitcoinPermissions> ){
         children.add_child(account_id, account_name);
         self.add_account(account_id, permissions)
     }
 
+    /// Create and add an `Account` to the list of accounts.
     pub fn add_account(&mut self, account_id:i32, permissions: Vec<BitcoinPermissions>){
         let new_account = Account {
             bitcoin_amount:0,
@@ -47,7 +63,7 @@ impl  HeadOfTheHouse {
         self.accounts.push(new_account)
     }
 
-
+    /// Get an `Account' by it's id.
     pub fn get_account_by_id(&self, account_id: i32) -> Option<&Account>{
         for account in &self.accounts {
             if account.account_id == account_id {
@@ -57,6 +73,7 @@ impl  HeadOfTheHouse {
         None
     }
 
+    /// Get a mutable `Account' by it's id.
     pub fn get_mut_account_by_id(&mut self, account_id: i32) -> Option<& mut Account>{
         for account in &mut self.accounts {
             if account.account_id == account_id {
@@ -65,11 +82,26 @@ impl  HeadOfTheHouse {
         }
         None
     }
-
+    
+    /// A function which spends bitcoin from the `MasterAccount`, and updates the associated `Account`.
+    /// 
+    /// Right now the transaction will be made with 1 sat per vbtye.
+    /// TODO, make sat per vbyte variable.
+    /// When the transaction is made, the pending_transaction will be added to the `Account`'s pending_transactions.
+    /// 
+    /// # Errors 
+    /// If the `Account` or the `MasterAccount` does not have sufficient funds then it will return an `AccountError`.
+    /// If the wallet can not make the transaction and send it to the bitcoin network it will return an `AccountError`.
+    /// If the user_id is not associated with any active Account then return an `AccountError`.
     pub fn spend_bitcoin(&mut self, user_id: i32, amount: u64, address: &str)-> Result<&'static str, AccountError> {
         let sufficient_funds = self.does_user_have_sufficient_funds_to_spend(user_id, amount).or_else(|_e| Err(AccountError::InsufficientAccount))?;
         if self.does_user_have_permission_to_spend(user_id) && sufficient_funds {
-            let user_btc_utxo_non_transfer_amount = self.get_account_balance_without_transfered_amount(user_id).unwrap(); //TODO remove the unwrap
+            let user_btc_utxo_non_transfer_amount = match self.get_account_balance_without_transfered_amount(user_id) {    
+                Err(_wallet_error) => {
+                    return Err(AccountError::Default(""))
+                },
+                Ok(result) => result,
+            };
 
             let spend_bitcoin_result = self.master_account.spend_bitcoin(amount, address, 1.0);
             match spend_bitcoin_result {
@@ -103,6 +135,7 @@ impl  HeadOfTheHouse {
         }
     }
 
+    /// Return true if the user account has more bitcoin than the `amount_to_spend`, else return false.
     pub fn does_user_have_sufficient_funds_to_spend(&mut self, user_id:i32, amount_to_spend:u64)->Result<bool, WalletError>{
         let account_balance = self.get_account_balance_utxo_amount_plus_transfer_balance(user_id)?;
 
@@ -113,6 +146,7 @@ impl  HeadOfTheHouse {
         }
     }
 
+    /// Return true if the user has the permission to spend bitcoin, else return false.
     pub fn does_user_have_permission_to_spend(&self, user_id:i32)->bool{
         let user_account_option = self.get_account_by_id(user_id);
         return match user_account_option {
@@ -121,6 +155,10 @@ impl  HeadOfTheHouse {
         }
     }
 
+    /// Subtract amount from an `Account`'s bitcoin amount.
+    /// 
+    /// # Errors
+    /// If the account does not exist then return an `AccountError`.
     pub fn subtract_amount_from_user_account(&mut self, user_id:i32, amount: u64)->Result<(), AccountError>{
         let account_option = self.get_mut_account_by_id(user_id);
         match account_option {
@@ -130,6 +168,10 @@ impl  HeadOfTheHouse {
         Ok(())
     }
 
+    /// Add a pending transaction to an `Accounts`'s `pending_transactions`.
+    /// 
+    /// # Errors
+    /// If the account does not exist then return an `AccountError`.
     pub fn add_pending_transaction_to_user_account(&mut self, user_id:i32, pending_transaction:TransactionDetails)->Result<(), AccountError>{
         let account_option = self.get_mut_account_by_id(user_id);
         match account_option {
@@ -139,9 +181,12 @@ impl  HeadOfTheHouse {
         Ok(())
     }
 
+    /// Generate a new address from the master account and add it to the users account.
+    /// 
+    /// # Errors 
+    /// If there is complications generating a new address return a `WalletError`.
+    /// If the account does not exist then return a `WalletError`.
     pub fn get_new_address(&mut self, user_id:i32,)-> Result<Address, WalletError> {
-        // get a new address from the master account
-        // then add it to the users account
         let new_address = self.master_account.generate_new_address()?;
         // add new address to the users account 
         let account = self.get_mut_account_by_id(user_id).ok_or(WalletError::AddressError)?;
@@ -149,7 +194,12 @@ impl  HeadOfTheHouse {
         Ok(new_address)
     }
 
-    pub fn get_account_utxo_balance(&mut self, user_id:i32)-> Result<u64, WalletError>{
+    /// Get the utxo bitcoin balance from an `Account`.
+    /// 
+    /// # Errors
+    /// If there is trouble syncing the wallet return `WalletError`.
+    /// If the account does not exist then return a `WalletError`.
+    pub fn get_account_balance_without_transfered_amount(&mut self, user_id:i32)-> Result<u64, WalletError>{
         let mut total_balance = 0;
         self.master_account.sync_wallet()?;
         let account = self.get_account_by_id(user_id).ok_or(WalletError::AddressError)?;
@@ -166,32 +216,45 @@ impl  HeadOfTheHouse {
         Ok(total_balance)
     }
 
-    pub fn get_account_balance(&mut self, user_id:i32)-> Result<u64, WalletError>{
-        let utxo_balance = self.get_account_utxo_balance(user_id)?;
+    /// Get an `Account`'s utxo balance and update the bitcoin_amount.
+    /// 
+    /// # Errors 
+    /// If there is an issue getting the utxo balance then return a `WalletError`.
+    /// If the account does not exist then return a `WalletError`.
+    pub fn get_and_update_account_balance(&mut self, user_id:i32)-> Result<u64, WalletError>{
+        let utxo_balance = self.get_account_balance_without_transfered_amount(user_id)?;
         let account = self.get_mut_account_by_id(user_id).ok_or(WalletError::AddressError)?;
         account.bitcoin_amount = utxo_balance;
         Ok(account.bitcoin_amount)
     }
 
+    /// Get an `Account`'s `bitcoin_transfered_from_master` value.
+    /// 
+    /// # Errors
+    /// If the account does not exist then return a `WalletError`.
     pub fn get_account_balance_transfer_amount(&mut self, user_id:i32)-> Result<u64, WalletError>{
         let account = self.get_mut_account_by_id(user_id).ok_or(WalletError::AddressError)?;
         let amount_transfered_from_master = account.bitcoin_transfered_from_master;
         Ok(amount_transfered_from_master)
     }
 
+    /// Get an `Account`'s total bitcoin balance, this includes the utxo amount and the amount transfered from the `MasterAccount`.
+    /// 
+    /// # Errors 
+    /// If the account does not exist then return a `WalletError`.
+    /// If there is an issue getting the utxo balance then return a `WalletError`.
     pub fn get_account_balance_utxo_amount_plus_transfer_balance(&mut self, user_id:i32)-> Result<u64, WalletError>{
-        let utxo_balance = self.get_account_utxo_balance(user_id)?;
+        let utxo_balance = self.get_and_update_account_balance(user_id)?;
         let account = self.get_mut_account_by_id(user_id).ok_or(WalletError::AddressError)?;
-        account.bitcoin_amount = utxo_balance;
+        
         let amount_transfered_from_master = account.bitcoin_transfered_from_master;
-        Ok(account.bitcoin_amount + amount_transfered_from_master)
+        Ok(utxo_balance + amount_transfered_from_master)
     }
 
-    // TODO make this not a duplicate of above
-    pub fn get_account_balance_without_transfered_amount(&mut self, user_id:i32)-> Result<u64, WalletError>{
-        Ok(self.get_account_utxo_balance(user_id)?)
-    }
-
+    /// Get the bitcoin spend total that is currently pending.
+    /// 
+    /// # Errors 
+    /// If the `Account` does not exist return an `AccountError`.
     pub fn get_pending_spend_amount(&mut self,  user_id:i32)-> Result<u64, AccountError>{ 
         let account_option = self.get_account_by_id(user_id);
 
@@ -211,6 +274,15 @@ impl  HeadOfTheHouse {
         Ok(pending_spend_amount)
       }
 
+    /// Transfer bitcoin from the `MasterAccount` to another `Account`.
+    /// 
+    /// No bitcoin is actually sent, the MasterAccount updates how much bitcoin it has transfered to other `Account`s
+    /// and the `Account` updates how much bitcoin it has received from the MasterAccount. It is purely an internal
+    /// accounting action.
+    /// 
+    /// # Errors
+    /// If the `MasterAccount` does not have the funds to transfer to the `Account` Throw an `AccountError`.
+    /// If the `Account` does not exist throw an `AccountError`.
     pub fn transfer_bitcoin_from_master_to_child(&mut self, transfer_amount: u64, child_id:i32)-> Result<(), AccountError>{
         let total_bitcoin_in_master_account = self.master_account.get_bitcoin_total_minus_transfers_to_children().or(Err(AccountError::InsufficientAccount))?;
         
@@ -234,7 +306,14 @@ impl  HeadOfTheHouse {
         }
     }
 
-    // none child utxo bitcoin, this is only getting back the bitcoin that the child had transfered to it.
+    /// Transfer previously `MasterAccount` -> `Account` back to the `MasterAccount` from the `Account`.
+    /// 
+    /// This will only transfer bitcoin internally, no actual bitcoin transaction will be made.
+    /// This is essentially an accounting change, and is the reverse of the `transfer_bitcoin_from_master_to_child` function.
+    /// 
+    /// # Errors 
+    /// If the amount that wants to be transfered from the `Account` to the `MasterAccount` is more than the `Account` 
+    /// has been transfered and has not spent, then throw an `AccountError`.
     pub fn transfer_bitcoin_from_child_to_master(&mut self, transfer_amount: u64, child_id:i32)-> Result<(), AccountError>{
         // if transfer_amount <= the amount the child has been transfered then make the swap
         let account_option = self.get_mut_account_by_id(child_id);
@@ -355,7 +434,7 @@ mod tests {
             Ok(_) => assert_eq!(false, true),
         }
 
-        let amount = new_head_of_house.get_account_balance(1).unwrap();
+        let amount = new_head_of_house.get_and_update_account_balance(1).unwrap();
         let master_account_total = new_head_of_house.master_account.get_bitcoin_total().unwrap();
 
         // user account and master amount should not be deducted
@@ -404,7 +483,7 @@ mod tests {
         aw!(mine_a_block(&second_child_first_address.to_string()));
         aw!(mine_a_block(&second_child_first_address.to_string()));
         sleep_while_block_being_mined();
-        let child_account_balance = new_head_of_house.get_account_balance(2).unwrap();
+        let child_account_balance = new_head_of_house.get_and_update_account_balance(2).unwrap();
         
         assert_eq!(child_account_balance, 200000000)
     }
@@ -507,7 +586,7 @@ mod tests {
         new_head_of_house.transfer_bitcoin_from_child_to_master(100000000, 2).unwrap();
 
         // get address for child?
-        let child_account_balance = new_head_of_house.get_account_balance(2);
+        let child_account_balance = new_head_of_house.get_and_update_account_balance(2);
         let master_account = new_head_of_house.master_account;
 
         assert_eq!(master_account.get_bitcoin_total_minus_transfers_to_children().unwrap(), 100000000); // master should now have 1 btc again

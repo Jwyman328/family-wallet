@@ -4,6 +4,11 @@ use crate::HeadOfTheHouse;
 use crate::custom_errors::{AccountError, WalletError};
 use bdk::bitcoin::Address;
 
+/// A Struct representating a Child, which is a user of a wallet.
+/// 
+/// Each Child has a `user_id` which is associated with the `user_id` of an `Account`
+/// The head_of_the_house will coordinate the relationship between a `Child` it's `Account` and the `MasterAccount`.
+/// This is why all Child actions are propigated to the `head_of_the_house`.
 #[derive(Debug)]
 pub struct Child {
     pub user_id: i32,
@@ -11,6 +16,7 @@ pub struct Child {
 }
 
 impl Child {
+    /// Spend bitcoin associated with a child's `Account`.
     pub fn spend_bitcoin(&self, head_of_the_house: &mut HeadOfTheHouse, amount:u64, address: &str) -> Result<&'static str, AccountError>{
         head_of_the_house.spend_bitcoin(self.user_id, amount, address)
     }
@@ -19,17 +25,3 @@ impl Child {
         Ok(new_address)
     }      
 }
-//#[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use mocks::{mock_child};
-
-//     //#[test]
-//     // fn has_permission_to_spend_returns_true_when_child_has_such_permission() {
-//     //     let child_with_permissions = get_child_with_permissions_to_spend();
-
-//     //     assert_eq!(child_with_permissions.has_permission_to_spend(), true)  
-//     // }
-    
-   
-// }

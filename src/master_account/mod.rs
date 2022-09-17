@@ -12,12 +12,20 @@ use bdk::electrum_client::Client;
 use bdk::blockchain::ElectrumBlockchain;
 use bdk::blockchain::Blockchain;
 use bdk::TransactionDetails;
-use crate::helpers::{convert_float_to_satoshis, convert_satoshis_to_float};
+use crate::helpers::{convert_float_to_satoshis};
 use crate::custom_errors::{WalletError, AccountError};
 use bdk::{Error};
 
 
-
+/// A struct representing the MasterAccount, which controls all interactions with an actual bitcoin wallet.
+/// 
+/// All bitcoin wallet based actions including, generating addresses, signing transactions, broadcasting them and more.
+/// In addition to bitcoin wallet actions and state the MasterAccount manages how other `Account`s have interacted with 
+/// it's wallet functionality. This includes `amount_transfered_to_children` which is an internal accounting of the value that 
+/// the MasterAccount theoretically no longer has access to and has given to other `Account`s.
+/// As well the MasterAccount keeps track of two different sets of addresses, `all_addresses` which include the addresses given to other 
+/// `Account`s to use, and the addresses that are unique to the `MasterAccount`. The `account_addresses` are the addresses just for the 
+/// MasterAccount and are addresses to funds that other `Account`s do not have access to.
 pub struct MasterAccount {
     pub bitcoin_amount: u64,
     pub all_addresses: Vec<AddressInfo>,
@@ -29,6 +37,12 @@ pub struct MasterAccount {
 }
 
 impl MasterAccount {
+    /// Generate a new MasterAccount, also generate the associated wallet with this account from the 
+    /// passed in seed `words`.
+    /// 
+    /// # Errors
+    /// If there is an error generating the wallet with the seed `words` then return an `AccountError`.
+    /// This could happen if you try to use invalid seed words.
     pub fn new(words:Option<String>) -> Result<MasterAccount, AccountError> {
         let wallet = MasterAccount::generate_wallet(words).map_err(
             |_err| AccountError::InsufficientAccount
@@ -45,6 +59,10 @@ impl MasterAccount {
         })
     }
 
+    /// Generate a wallet from seed `words`.
+    /// 
+    /// # Panics
+    /// If the words are invalid panic the app. TODO allow for the ability to retry generating a wallet. 
     pub fn generate_wallet(words:Option<String>)-> Result<Wallet<MemoryDatabase>, WalletError> {
         // if provided words, then use them to generate a wallet,
         // if not then generate your own randomly
@@ -79,10 +97,13 @@ impl MasterAccount {
         Ok(wallet)
     }
 
-    /// This function connects to a currently running electrum server 
-    /// and returns the ElectrumBlockchain struct. 
-    /// this can be an running electrum server, by default we will connect to blockstreams
-    /// but it could be a local server as well like a regtest one created from nigiri at 127.0.0.1:50000
+    /// This function connects the wallet to an electrum server.
+    /// 
+    /// The electrum server can be a local running electrum server, or by default it will connect to blockstream's.
+    /// In test mode it will conntect to a regtest electrum server created from nigiri at 127.0.0.1:50000.
+    /// 
+    /// # Errors
+    /// If we can not connect to the electrum server return a `WalletError`.
     pub fn sync_wallet_with_electrum_server(&mut self, electrum_url: Option<&str>) -> Result<(), WalletError>{
         let default_electrum_server = env::var("electrum_server")?;
         let electrum_client_url = electrum_url.unwrap_or(&default_electrum_server);
@@ -95,10 +116,22 @@ impl MasterAccount {
         Ok(())
     }
 
+    /// Set the `MasterAccount` blockchain.
     pub fn set_blockchain(&mut self, blockchain: ElectrumBlockchain){
         self.blockchain = Some(blockchain);
     }
 
+    /// Spend bitcoin from our bitcoin wallet.
+    /// 
+    /// This will sign a bitcoin transaction and broadcast it to the bitcoin network.
+    /// After the transaction is broadcast we will update the `pending_transactions` with the new transaction,
+    /// and get the new bitcoin amount.
+    /// 
+    /// # Errors
+    /// If there is an error syncing to our wallet return a `WalletError`.
+    /// If the passed in address is invalid return a `WalletError`.
+    /// If there is an issue signing the transaction return a  `WalletError`.
+    /// If there is an issue broadcasting the bitcoin transaction return a  `WalletError`.
     pub fn spend_bitcoin(&mut self, amount: u64, address: &str, sat_per_vb: f32 ) -> Result<TransactionDetails, WalletError>{
         // make sure our wallet is up to date before we make a spend.
         self.sync_wallet()?;
@@ -153,6 +186,7 @@ impl MasterAccount {
         Ok(copied_transaction)
     }
 
+    /// Generate a new address and add it to the `all_addresses`.
     pub fn generate_new_address(&mut self) -> Result<Address, WalletError> {        
         let my_new_address = self.wallet.get_address(New)?;
         let copied_address = my_new_address.clone();
@@ -160,6 +194,10 @@ impl MasterAccount {
         Ok(copied_address)
     }
 
+    /// Calculate the total amount of bitcoin the user has sent but is still pending in the mempool.
+    /// 
+    /// # Errors
+    /// If there is an issue getting the pending transactions return a `WalletError`.
     pub fn get_pending_spend_amount(&mut self)-> Result<u64, WalletError>{ 
       let pending_transactions = self.get_pending_transactions()?;
       
@@ -171,24 +209,45 @@ impl MasterAccount {
       Ok(pending_spend_amount)
     }
 
+    /// Get total bitcoin for this wallet.
+    /// 
+    /// This is done by looking at all associated addresses for this wallet xpub.
+    /// This is strictly derived from the bitcoin blockchain it has nothign to do with 
+    /// a MasterAccounts internal accounting, this will return a sum of bitcoin for the entire 
+    /// wallet, regardless is it was recieved by the `MasterAccount` or another `Account`.
+    /// 
+    /// # Errors
+    /// If there is an issue connecting to the bitcoin network return an `Error`.
     pub fn get_bitcoin_total(&self)-> Result<u64, Error> { 
         self.sync_wallet().unwrap();
         self.wallet.get_balance()
      }
 
+    /// Get the total bitcoin amount derived fomr the blockchain and then subtract what has been given to other `Account`s.
+    /// 
+    /// # Errors
+    /// If there is an issue connecting to the bitcoin network return an `Error`.
     pub fn get_bitcoin_total_minus_transfers_to_children(&self) ->Result<u64, Error> {
         let total_amount_from_utxos =  self.get_bitcoin_total()?;
         Ok(total_amount_from_utxos -  self.amount_transfered_to_children)
     }
 
+    /// Increase the `amount_transfered_to_children`.
     pub fn transfer_bitcoin(&mut self, amount: u64){
         self.amount_transfered_to_children += amount
     }
 
+    /// Decrease the `amount_transfered_to_children`.
     pub fn receive_bitcoin_transfer_from_child(&mut self, amount: u64){
         self.amount_transfered_to_children -= amount
     }
 
+    /// Look through the transaction in `pending_transactions` and refetch them from the blockchain, if they are no longer pending remove them
+    /// from the `pending_transactions`.
+    /// 
+    /// # Errors
+    /// If there is an issue syncing with the bitcoin network return a `WalletError`.
+    /// If there is an issue getting a transaction return a `WallerError`.
     pub fn get_pending_transactions(&mut self) -> Result<&Vec<TransactionDetails>, WalletError>{
         // resync the blockchain to the wallet again to get the latest data.
         self.sync_wallet()?;
@@ -212,6 +271,10 @@ impl MasterAccount {
         Ok(self.pending_transactions.as_ref())
     }
 
+    /// Sync the `MasterAccount` bitcoin wallet with an electrum server.
+
+    /// # Errors
+    /// If there is an issue syncing with the bitcoin network return a `WalletError`.
     pub fn sync_wallet(&self)-> Result<(),WalletError>{
         let current_blockchain_option = self.blockchain.as_ref();
         match current_blockchain_option {

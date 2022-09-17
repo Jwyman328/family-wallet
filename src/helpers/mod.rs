@@ -7,7 +7,3 @@ pub fn convert_float_to_satoshis(amount:f64) -> u64{
     satoshis
 }
 
-pub fn convert_satoshis_to_float(amount:u64) -> f64{
-    amount as f64
-}
-
