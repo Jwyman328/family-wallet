@@ -48,7 +48,7 @@ pub fn set_env_variables(force_test: Option<bool>){
         };
 
         let location_port = EnvironmentVariable {
-            name:"url_location",
+            name:"location_port",
             value: "8081"
         };
     

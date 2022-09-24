@@ -1,5 +1,6 @@
 use actix_web::{web, App, HttpServer};
 use crate::api::get_balance::{ get_balance_from_wallet};
+use crate::api::sign_up::sign_up;
 use crate::HeadOfTheHouse;
 use crate::custom_errors::{ AccountError};
 use std::env;
@@ -57,9 +58,9 @@ pub async fn main_api(mnemonic:Option<String>) -> std::io::Result<()> {
     HttpServer::new(move|| {
         App::new().app_data(api_shared_state.clone())
         .service(get_balance_from_wallet)
+        .service(sign_up)
     })
     .bind((url_location, location_port))?
     .run()
     .await
-
 }
