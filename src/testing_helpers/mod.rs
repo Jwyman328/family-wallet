@@ -76,7 +76,7 @@ pub fn test_result_type_is_not_err<T, E>(result:Result<T,E>){
 
 /// A global set up function for all tests which will set up all the neccesary environment variables.
 pub fn set_up(){
-    set_env_variables();
+    set_env_variables(Some(true));
 }
 
 /// Get the `test_address` environment variables

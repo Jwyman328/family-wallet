@@ -26,18 +26,20 @@ fn main() {
     // TODO what do we needd to set up.
     // an electrum server
     // master account etc
-    let mut default_children = Children::new();
+    // let mut default_children = Children::new();
     let random_words = get_random_mnenomic_words();
-    let mut master = HeadOfTheHouse::new(&mut default_children, random_words).unwrap();
-    // let receiving_address = master.get_new_address(1).unwrap();
-    // block_on( mine_a_block(&receiving_address.to_string()));
-
-    // use the nigiri electrum regtest server for now and mine a block to an address 
-    // dont forget the nigiri electrum server must be running.
-    let nigiri_electrum_server = Some("127.0.0.1:50000");
-    master.master_account.sync_wallet_with_electrum_server(nigiri_electrum_server); // sync with blockstream by default
+    // let mut master = HeadOfTheHouse::new(&mut default_children, random_words).unwrap();
     
-    main_api(master);
+    // // let receiving_address = master.get_new_address(1).unwrap();
+    // // block_on( mine_a_block(&receiving_address.to_string()));
+
+    // // use the nigiri electrum regtest server for now and mine a block to an address 
+    // // dont forget the nigiri electrum server must be running.
+    // let nigiri_electrum_server = Some("127.0.0.1:50000");
+    // master.master_account.sync_wallet_with_electrum_server(nigiri_electrum_server); // sync with blockstream by default
+    
+    // main_api(master);
+    main_api(random_words);
 
     // println!("Hello, world! {:?}", master.children.get(0));
 }

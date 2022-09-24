@@ -21,11 +21,11 @@ pub struct EnvironmentVariable {
 }
 
 /// Set default enviornment variables based off of the current runtime environment (test, dev/prod).
-pub fn set_env_variables(){
+pub fn set_env_variables(force_test: Option<bool>){
     let mut env_variables:Vec<EnvironmentVariable> = vec![];
 
     // if we are in testing environmnt set the test env variables
-    if cfg!(test) {
+    if cfg!(test) || force_test.unwrap() {
         // do test stuff
         let test_address = EnvironmentVariable{
             name: "test_address",
@@ -41,10 +41,23 @@ pub fn set_env_variables(){
             name:"electrum_server",
             value:"127.0.0.1:50000"
         };
+
+        let url_location = EnvironmentVariable {
+            name:"url_location",
+            value: "127.0.0.1"
+        };
+
+        let location_port = EnvironmentVariable {
+            name:"url_location",
+            value: "8081"
+        };
     
         env_variables.push(test_address);
         env_variables.push(regtest_rpc);
         env_variables.push(nigiri_electrum_server);
+        env_variables.push(url_location);
+        env_variables.push(location_port);
+
     } else {
         // we are in a dev or production environment, set appropriate env variables
         let blockstream_electrum_server = EnvironmentVariable {
@@ -65,7 +78,7 @@ pub mod test {
     use super::*;
     #[test]
     fn test_set_env_variables_sets_env_variables(){
-        set_env_variables();
+        set_env_variables(Some(false));
         assert_eq!(env::var("test_address").unwrap(), "bcrt1q2ltw5646zcdxcj7hvv47mklqy8la6ta83p6egw")
     }
 }
