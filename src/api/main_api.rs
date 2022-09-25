@@ -2,14 +2,14 @@ use actix_web::{web, App, HttpServer};
 use crate::api::get_balance::{ get_balance_from_wallet};
 use crate::api::sign_up::sign_up;
 use crate::HeadOfTheHouse;
-use crate::custom_errors::{ AccountError};
+use crate::custom_errors::{AccountError};
 use std::env;
 use crate::children::Children;
 use ::config::Config;
 use dotenv::dotenv;
 use tokio_postgres::NoTls;
-use deadpool_postgres::{Pool, Client, Manager};
-use crate::db::config::ExampleConfig;
+use deadpool_postgres::{Pool};
+use crate::db::config::ServerConfig;
 
 /// A struct that may contain seed words used to initalize a bitcoin wallet.
 pub struct WalletIniliazer {
@@ -57,7 +57,7 @@ pub async fn main_api(mnemonic:Option<String>) -> std::io::Result<()> {
         .build()
         .unwrap();
 
-    let config: ExampleConfig = config_.try_deserialize().unwrap();
+    let config: ServerConfig = config_.try_deserialize().unwrap();
 
     let pool = config.pg.create_pool(None, NoTls).unwrap();
 
