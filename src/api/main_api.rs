@@ -6,18 +6,18 @@ use crate::custom_errors::{AccountError};
 use std::env;
 use crate::children::Children;
 use ::config::Config;
-use dotenv::dotenv;
 use tokio_postgres::NoTls;
 use deadpool_postgres::{Pool};
 use crate::db::config::ServerConfig;
 
 /// A struct that may contain seed words used to initalize a bitcoin wallet.
-pub struct WalletIniliazer {
+/// as well as a database connection pool to the postgres database.
+pub struct ApiSharedState {
    pub words: Option<String>,
    pub db_pool: Pool
 }
 
-impl WalletIniliazer {
+impl ApiSharedState {
     /// Initialize and get the head of the house.
     /// 
     /// # Errors
@@ -50,8 +50,6 @@ pub fn initiate_wallet(mnemonic:Option<String>)-> Result<HeadOfTheHouse, Account
 /// If the env variables url_location or location_port do not exist, the server will not be able to mount.
 #[actix_web::main]
 pub async fn main_api(mnemonic:Option<String>) -> std::io::Result<()> {
-    dotenv().ok();
-
     let config_ = Config::builder()
         .add_source(::config::Environment::default())
         .build()
@@ -61,16 +59,13 @@ pub async fn main_api(mnemonic:Option<String>) -> std::io::Result<()> {
 
     let pool = config.pg.create_pool(None, NoTls).unwrap();
 
-
-    //
-    let wallet_initializer =  WalletIniliazer {
+    let wallet_initializer =  ApiSharedState {
         words: mnemonic,
         db_pool: pool
     };
     
     let api_shared_state = web::Data::new(
         wallet_initializer,
-        
     );
 
     let url_location = env::var("url_location").unwrap();

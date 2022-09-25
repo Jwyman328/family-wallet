@@ -1,21 +1,16 @@
 use actix_web::{post, web, HttpResponse, Responder, Error};
-use crate::api::main_api::WalletIniliazer;
-use serde::Deserialize;
-use deadpool_postgres::{Client, Pool};
+use crate::api::main_api::ApiSharedState;
+use deadpool_postgres::{Client};
 
 use crate::db::{actions, errors::MyError, models::user::User};
 
-
-#[derive(Deserialize)]
-pub struct SignupInfo {
-    pub username: String,
-    pub password: String
-}
-
-
+/// Add a new user to the database.
+/// 
+/// # Errors
+/// If the data entered to create a user is invalid an error will be thrown.
 pub async fn add_user(
     user: web::Json<User>,
-    data: web::Data<WalletIniliazer>,
+    data: web::Data<ApiSharedState>,
 ) -> Result<User, Error> {
     let user_info: User = user.into_inner();
 
@@ -26,12 +21,11 @@ pub async fn add_user(
     Ok(new_user)
 }
 
-
-/// Get the current wallet balance
+/// Create a new user.
 #[post("/sign_up")]
 pub async fn sign_up(
     user: web::Json<User>,
-    data: web::Data<WalletIniliazer>
+    data: web::Data<ApiSharedState>
 ) -> impl Responder {
     let add_user_result = add_user(user, data).await; //TODO handle error case
     // get request data 

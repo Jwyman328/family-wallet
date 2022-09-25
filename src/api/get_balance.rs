@@ -1,10 +1,10 @@
 use actix_web::{get, web, HttpResponse, Responder};
-use crate::api::main_api::WalletIniliazer;
+use crate::api::main_api::ApiSharedState;
 
 
 /// Get the current wallet balance
 #[get("/get_balance_from_wallet")]
-pub async fn get_balance_from_wallet(data: web::Data<WalletIniliazer>) -> impl Responder {
+pub async fn get_balance_from_wallet(data: web::Data<ApiSharedState>) -> impl Responder {
     let mut head_of_house = data.get_head_of_house().unwrap(); // TODO remove unwrap
 
     let my_current_balance =  head_of_house.get_account_balance_utxo_amount_plus_transfer_balance(1).unwrap();

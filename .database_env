@@ -1,3 +1,5 @@
+# This is server only environment variables
+# all other environment variables are set in the  env_variables/mod.rs file.
 SERVER_ADDR=127.0.0.1:8080
 PG.USER=family_wallet
 PG.PASSWORD=family_wallet_password

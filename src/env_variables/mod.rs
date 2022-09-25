@@ -1,4 +1,5 @@
 use std::env;
+use dotenv::dotenv; // why does this say this is not used, I am using it below.
 
 /// An environment variable represented as a struct.
 /// 
@@ -23,6 +24,10 @@ pub struct EnvironmentVariable {
 /// Set default enviornment variables based off of the current runtime environment (test, dev/prod).
 pub fn set_env_variables(force_test: Option<bool>){
     let mut env_variables:Vec<EnvironmentVariable> = vec![];
+
+    // set up database env variables 
+    // currently there is no differenciation between environments.
+    dotenv::from_filename(".database_env").ok();
 
     // if we are in testing environmnt set the test env variables
     if cfg!(test) || force_test.unwrap() {
