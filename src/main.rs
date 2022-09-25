@@ -10,6 +10,7 @@ pub mod testing_helpers;
 pub mod env_variables;
 pub mod custom_errors;
 pub mod api;
+pub mod db;
 
 use head_of_the_house::HeadOfTheHouse;
 // use permissions::BitcoinPermissions;

@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:13-alpine
+    volumes:
+      - ./src/db/sql/init:/docker-entrypoint-initdb.d
+
+    environment:
+      - POSTGRES_USER=family_wallet
+      - POSTGRES_PASSWORD=family_wallet_password
+      - POSTGRES_DB=family_wallet
+    ports:
+      - 5432:5432
+
+  # test_db:
+  #   image: postgres:12
+  #   container_name: test_db
+  #   environment:
+  #     # allow anyone to connect - even without a password
+  #     # only use for running locally or in CI/CD
+  #     - POSTGRES_USER=test_family_wallet
+  #     - POSTGRES_PASSWORD=test_family_wallet_password
+  #     - POSTGRES_DB=test_family_wallet
+  #   # postgres image per default runs on port 5432
+  #   # we need to expose the container to the host machine so we can run our tests
+  #   # if you also run Postgres locally, change the docker host port to something else
+  #   # and update your index.js file inside the config folder
+  #   ports:
+  #     - '5432:5432'
+  #   volumes:
+  #     # docker will run SQL files that are copied to /docker-entrypoint-initdb.d automatically
+  #     # this gives us an easy way to run migrations / create db tables
+  #     # the order in which they are run is determined by the prefix
+  #     # so always prefix your migration files with 01_, 02_, etc
+  #     - ./migrations:/docker-entrypoint-initdb.d
+
+# volumes:
+#   pgdata:

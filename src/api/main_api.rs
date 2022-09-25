@@ -5,10 +5,16 @@ use crate::HeadOfTheHouse;
 use crate::custom_errors::{ AccountError};
 use std::env;
 use crate::children::Children;
+use ::config::Config;
+use dotenv::dotenv;
+use tokio_postgres::NoTls;
+use deadpool_postgres::{Pool, Client, Manager};
+use crate::db::config::ExampleConfig;
 
 /// A struct that may contain seed words used to initalize a bitcoin wallet.
 pub struct WalletIniliazer {
-   pub words: Option<String>
+   pub words: Option<String>,
+   pub db_pool: Pool
 }
 
 impl WalletIniliazer {
@@ -44,12 +50,27 @@ pub fn initiate_wallet(mnemonic:Option<String>)-> Result<HeadOfTheHouse, Account
 /// If the env variables url_location or location_port do not exist, the server will not be able to mount.
 #[actix_web::main]
 pub async fn main_api(mnemonic:Option<String>) -> std::io::Result<()> {
+    dotenv().ok();
+
+    let config_ = Config::builder()
+        .add_source(::config::Environment::default())
+        .build()
+        .unwrap();
+
+    let config: ExampleConfig = config_.try_deserialize().unwrap();
+
+    let pool = config.pg.create_pool(None, NoTls).unwrap();
+
+
+    //
     let wallet_initializer =  WalletIniliazer {
-        words: mnemonic
+        words: mnemonic,
+        db_pool: pool
     };
     
     let api_shared_state = web::Data::new(
-        wallet_initializer
+        wallet_initializer,
+        
     );
 
     let url_location = env::var("url_location").unwrap();
