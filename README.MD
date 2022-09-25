@@ -17,7 +17,7 @@ $ bash tear_down_testing_env.sh
 ```bash
 $ bash set_up_dev_testing_env.sh
 ```
-- ### to tear down the dev environment first stop the terminal where the rust server is running with control x
+- ### to tear down the dev environment first stop the terminal where the rust server is running with control x control c
 - then run 
 ```bash
 $ bash tear_down_dev_env.sh

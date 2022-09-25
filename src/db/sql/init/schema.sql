@@ -1,7 +1,7 @@
-DROP SCHEMA IF EXISTS testing CASCADE;
-CREATE SCHEMA testing;
+DROP SCHEMA IF EXISTS public CASCADE;
+CREATE SCHEMA public;
 
-CREATE TABLE testing.users (
+CREATE TABLE public.users (
 	id  BIGSERIAL PRIMARY KEY,
 	email       VARCHAR(200) NOT NULL,
 	first_name  VARCHAR(200) NOT NULL,
