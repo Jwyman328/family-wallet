@@ -4,6 +4,7 @@ use deadpool_postgres::{Client};
 
 use crate::db::{actions, errors::MyError, models::user::User};
 use log::{info};
+use crate::api::error_responses::BadRequestResponse;
 
 
 /// Add a new user to the database.
@@ -29,8 +30,14 @@ pub async fn sign_up(
     user: web::Json<User>,
     data: web::Data<ApiSharedState>
 ) -> impl Responder {
-    info!("A new user endpoint additional log");
+    info!("A new user endpoint additional log 2");
     let add_user_result = add_user(user, data).await; //TODO handle error case
     // get request data 
-    HttpResponse::Ok().json(add_user_result.unwrap())
+    // safely handle result
+    match add_user_result {
+        Ok(user_data_response) => return HttpResponse::Ok().json(user_data_response),
+        Err(_) => return  HttpResponse::BadRequest().json(BadRequestResponse {
+            msg: String::from("Error adding a user")
+        }),
+    }
 }

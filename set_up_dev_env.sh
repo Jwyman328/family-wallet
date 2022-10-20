@@ -5,4 +5,4 @@ sleep 10 #wait for regtest nigiri to start up
 docker-compose up -d # start up postgres container
 
 cargo build
-cargo run # start up web server
+cargo watch -x 'run'  # FYI in prod mode we would want cargo run not cargo watch

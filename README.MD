@@ -14,6 +14,8 @@ $ bash tear_down_testing_env.sh
 - This will set up a regtest environment in a docker container.
 - In a separate docker container a postgres database will be initiated with the default schema defined in db/sql/init
 - The rust web server will be started locally, connecting to the nigiri regtest test docker container and connecting to the postgres database in a separate docker contianer.
+- The web server will be in watch mode using cargo-watch https://github.com/watchexec/cargo-watch with the command cargo watch -x 'run'
+- to start up dev environment run
 ```bash
 $ bash set_up_dev_env.sh
 ```
