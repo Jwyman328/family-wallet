@@ -7,3 +7,4 @@ PG.HOST=127.0.0.1
 PG.PORT=5432
 PG.DBNAME=family_wallet
 PG.POOL.MAX_SIZE=16
+RUST_LOG=info # set api level of logging 

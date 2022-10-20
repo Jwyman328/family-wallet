@@ -1,4 +1,4 @@
-use actix_web::{web, App, HttpServer};
+use actix_web::{web, App, HttpServer, middleware};
 use crate::api::get_balance::{ get_balance_from_wallet};
 use crate::api::sign_up::sign_up;
 use crate::HeadOfTheHouse;
@@ -70,9 +70,11 @@ pub async fn main_api(mnemonic:Option<String>) -> std::io::Result<()> {
 
     let url_location = env::var("url_location").unwrap();
     let location_port = env::var("location_port").unwrap().parse::<u16>().unwrap();
+    env_logger::init();
 
     HttpServer::new(move|| {
-        App::new().app_data(api_shared_state.clone())
+        App::new().wrap(middleware::Logger::default())
+        .app_data(api_shared_state.clone())
         .service(get_balance_from_wallet)
         .service(sign_up)
     })

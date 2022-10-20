@@ -3,6 +3,8 @@ use crate::api::main_api::ApiSharedState;
 use deadpool_postgres::{Client};
 
 use crate::db::{actions, errors::MyError, models::user::User};
+use log::{info};
+
 
 /// Add a new user to the database.
 /// 
@@ -11,7 +13,7 @@ use crate::db::{actions, errors::MyError, models::user::User};
 pub async fn add_user(
     user: web::Json<User>,
     data: web::Data<ApiSharedState>,
-) -> Result<User, Error> {
+) -> Result<User, Error> {  
     let user_info: User = user.into_inner();
 
     let client: Client = data.db_pool.get().await.map_err(MyError::PoolError)?;
@@ -27,6 +29,7 @@ pub async fn sign_up(
     user: web::Json<User>,
     data: web::Data<ApiSharedState>
 ) -> impl Responder {
+    info!("A new user endpoint additional log");
     let add_user_result = add_user(user, data).await; //TODO handle error case
     // get request data 
     HttpResponse::Ok().json(add_user_result.unwrap())
