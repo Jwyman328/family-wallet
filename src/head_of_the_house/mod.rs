@@ -502,7 +502,6 @@ mod tests {
         sleep_while_block_being_mined();
 
         let spend_result = second_child.spend_bitcoin(&mut new_head_of_house, convert_float_to_satoshis(0.00001), &get_base_address());
-        println!("what is the err {:?}", spend_result);
         test_result_type_is_not_err(spend_result);
         
         assert_eq!(new_head_of_house.get_pending_spend_amount(2).unwrap(), 100000141)

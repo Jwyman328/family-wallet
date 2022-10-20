@@ -15,6 +15,7 @@ use bdk::TransactionDetails;
 use crate::helpers::{convert_float_to_satoshis};
 use crate::custom_errors::{WalletError, AccountError};
 use bdk::{Error};
+use log::{info};
 
 
 /// A struct representing the MasterAccount, which controls all interactions with an actual bitcoin wallet.
@@ -76,7 +77,7 @@ impl MasterAccount {
             },
         };
 
-        println!("my mnemonic words {}", mnemonic_words);
+        info!("my mnemonic words {}", mnemonic_words);
 
         let network = Network::Regtest; // Or this can be Network::Bitcoin, Network::Signet or Network::Testnet
 
@@ -144,14 +145,15 @@ impl MasterAccount {
 
         let (mut psbt, tx_details) = tx_builder.finish()?;
 
-        println!("tx_details is {:?}", tx_details);
+        info!("tx_details is {:?}", tx_details);
     
         self.wallet.sign(&mut psbt, SignOptions::default())?;
         
         // now broadcast it 
         let raw_transaction = psbt.extract_tx();
         let txid = raw_transaction.txid();
-        println!("the txid {}", txid);
+        info!("the txid {}", txid);
+
         let my_blockchain = self.blockchain.as_ref();
         
         let electrum_blockchain_option = my_blockchain;
@@ -174,14 +176,14 @@ impl MasterAccount {
              confirmation_time: tx_details.confirmation_time.clone()};
 
         // now we have a pending transaction, so add it to the list of pending_transactions
-        println!("I am pushing tx_details  {:?} to pending_transactions", copied_transaction);
+        info!("I am pushing tx_details  {:?} to pending_transactions", copied_transaction);
         self.pending_transactions.push(tx_details);
 
-        println!("bitcoin amount {} other amount {}", self.bitcoin_amount, amount);
+        info!("bitcoin amount {} other amount {}", self.bitcoin_amount, amount);
         // TODO should this be get_bitcoin_total? should we update here?
         // yes we need to update after spending
         self.bitcoin_amount = self.get_bitcoin_total()?; // - amount;
-        println!("you have spent {} bitcoin, you now have {} remaining", amount, self.bitcoin_amount);
+        info!("you have spent {} bitcoin, you now have {} remaining", amount, self.bitcoin_amount);
 
         Ok(copied_transaction)
     }
@@ -261,7 +263,7 @@ impl MasterAccount {
                 // remove it from the list if it has been confirmed
                 transactions_that_are_no_longer_pending.push(my_transaction.txid.clone());
             }
-            println!("txId {} this is my transaction {:?}", transaction_detail.txid, my_transaction);
+            info!("txId {} this is my transaction {:?}", transaction_detail.txid, my_transaction);
         }
         // filter out the pending transactions, removing the ones that have been confirmed
         for item in transactions_that_are_no_longer_pending{

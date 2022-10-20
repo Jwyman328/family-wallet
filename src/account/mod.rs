@@ -2,6 +2,7 @@ pub mod mocks;
 use bdk::{bitcoin::{Address, Script}, TransactionDetails};
 
 use crate::permissions::BitcoinPermissions;
+use log::{info};
 
 /// An `Account` struct is used to determine the details of a users wallet state.
 /// 
@@ -71,7 +72,7 @@ impl Account {
 
      /// Add a transaction to the `Account`'s list of pending_transactions.
      pub fn add_pending_transaction(&mut self, pending_transaction: TransactionDetails){
-        println!("we are adding a pending transaction {:?}", pending_transaction);
+        info!("we are adding a pending transaction {:?}", pending_transaction);
         self.pending_transactions.push(pending_transaction);
      }
 
